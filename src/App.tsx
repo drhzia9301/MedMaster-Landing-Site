@@ -1,11 +1,17 @@
 import { useState } from 'react';
 import LandingPage from './components/LandingPage';
 import AuthModal from './components/AuthModal';
+import PricingPage from './components/PricingPage';
+import DocumentationPage from './components/DocumentationPage';
+import DownloadsPage from './components/DownloadsPage';
 import { AuthProvider } from './contexts/AuthContext';
+
+type CurrentPage = 'landing' | 'pricing' | 'documentation' | 'downloads';
 
 function App() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+  const [currentPage, setCurrentPage] = useState<CurrentPage>('landing');
 
   const handleGetStarted = () => {
     setAuthMode('signup');
@@ -31,13 +37,48 @@ function App() {
     setShowAuthModal(false);
   };
 
+  // Navigation handlers
+  const handleNavigateToPricing = () => {
+    setCurrentPage('pricing');
+  };
+
+  const handleNavigateToDocumentation = () => {
+    setCurrentPage('documentation');
+  };
+
+  const handleNavigateToDownloads = () => {
+    setCurrentPage('downloads');
+  };
+
+  const handleBackToLanding = () => {
+    setCurrentPage('landing');
+  };
+
+  const renderCurrentPage = () => {
+    switch (currentPage) {
+      case 'pricing':
+        return <PricingPage onBackToLanding={handleBackToLanding} />;
+      case 'documentation':
+        return <DocumentationPage onBackToLanding={handleBackToLanding} />;
+      case 'downloads':
+        return <DownloadsPage onBackToLanding={handleBackToLanding} />;
+      default:
+        return (
+          <LandingPage 
+            onGetStarted={handleGetStarted}
+            onLogin={handleLogin}
+            onNavigateToPricing={handleNavigateToPricing}
+            onNavigateToDocumentation={handleNavigateToDocumentation}
+            onNavigateToDownloads={handleNavigateToDownloads}
+          />
+        );
+    }
+  };
+
   return (
     <AuthProvider>
       <div className="App">
-        <LandingPage 
-          onGetStarted={handleGetStarted}
-          onLogin={handleLogin}
-        />
+        {renderCurrentPage()}
         
         {showAuthModal && (
           <AuthModal

@@ -373,8 +373,8 @@ function LandingPageContent({ onGetStarted, onAuthSuccess, onNavigateToPricing, 
               <button
                 className="block w-full text-left text-gray-300 hover:text-white transition-colors"
                 onClick={() => {
-                  setMobileMenuOpen(false);
                   onNavigateToDocumentation?.();
+                  setMobileMenuOpen(false);
                 }}
               >
                 Documentation
@@ -382,8 +382,8 @@ function LandingPageContent({ onGetStarted, onAuthSuccess, onNavigateToPricing, 
               <button
                 className="block w-full text-left text-gray-300 hover:text-white transition-colors"
                 onClick={() => {
-                  setMobileMenuOpen(false);
                   onNavigateToPricing?.();
+                  setMobileMenuOpen(false);
                 }}
               >
                 Pricing

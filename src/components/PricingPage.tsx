@@ -5,9 +5,10 @@ import CrownIcon from './icons/CrownIcon';
 
 interface PricingPageProps {
   onShowLandingLogin?: () => void;
+  onBackToLanding?: () => void;
 }
 
-function PricingPage({ onShowLandingLogin }: PricingPageProps) {
+function PricingPage({ onShowLandingLogin, onBackToLanding }: PricingPageProps) {
   const [paymentLoading, setPaymentLoading] = useState<string | null>(null);
 
   // Payment handling functions
@@ -30,7 +31,7 @@ function PricingPage({ onShowLandingLogin }: PricingPageProps) {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-4">
               <button 
-                onClick={() => window.history.back()}
+                onClick={onBackToLanding || (() => window.history.back())}
                 className="text-gray-300 hover:text-white transition-colors"
               >
                 ← Back

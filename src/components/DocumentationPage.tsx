@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 
 interface DocumentationPageProps {
-  onBack: () => void;
+  onBackToLanding?: () => void;
 }
 
-const DocumentationPage: React.FC<DocumentationPageProps> = ({ onBack }) => {
+const DocumentationPage: React.FC<DocumentationPageProps> = ({ onBackToLanding }) => {
   const [activeSection, setActiveSection] = useState('overview');
 
   const sections = [
@@ -25,7 +25,7 @@ const DocumentationPage: React.FC<DocumentationPageProps> = ({ onBack }) => {
         {/* Header */}
         <div className="flex items-center mb-8">
           <button
-            onClick={onBack}
+            onClick={onBackToLanding || (() => window.history.back())}
             className="flex items-center text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors mr-4"
           >
             ← Back

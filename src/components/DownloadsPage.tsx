@@ -2,12 +2,12 @@ import React from 'react';
 import { ArrowLeft, Download } from 'lucide-react';
 
 interface DownloadsPageProps {
-  onBack?: () => void;
+  onBackToLanding?: () => void;
   onGetStarted?: () => void;
   onLogin?: () => void;
 }
 
-const DownloadsPage: React.FC<DownloadsPageProps> = ({ onBack }) => {
+const DownloadsPage: React.FC<DownloadsPageProps> = ({ onBackToLanding }) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900">
       {/* Header */}
@@ -16,7 +16,7 @@ const DownloadsPage: React.FC<DownloadsPageProps> = ({ onBack }) => {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center">
               <button
-                onClick={onBack}
+                onClick={onBackToLanding || (() => window.history.back())}
                 className="flex items-center gap-2 text-gray-300 hover:text-white transition-all duration-300 hover:scale-105 mr-4"
               >
                 <ArrowLeft className="w-5 h-5" />
