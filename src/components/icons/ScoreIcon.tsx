@@ -1,0 +1,20 @@
+import React from 'react';
+
+interface ScoreIconProps {
+  className?: string;
+}
+
+const ScoreIcon: React.FC<ScoreIconProps> = ({ className = "w-5 h-5" }) => {
+  return (
+    <svg
+      className={className}
+      fill="currentColor"
+      viewBox="0 0 24 24"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path d="M12 2L15.09 8.26L22 9L17 14L18.18 21L12 17.77L5.82 21L7 14L2 9L8.91 8.26L12 2Z" />
+    </svg>
+  );
+};
+
+export default ScoreIcon;
