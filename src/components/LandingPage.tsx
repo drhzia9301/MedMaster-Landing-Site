@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowRight, Medal, X, Book } from 'lucide-react';
 import BrainIcon from './icons/BrainIcon';
-import StethoscopeIcon from './icons/StethoscopeIcon';
 import TrophyIcon from './icons/TrophyIcon';
 import BugIcon from './icons/BugIcon';
 import ChartBarIcon from './icons/ChartBarIcon';
@@ -13,7 +12,7 @@ import AuthPage from './AuthPage';
 import LandingLoginPage from './LandingLoginPage';
 import LandingSignupPage from './LandingSignupPage';
 import LandingProfileButton from './LandingProfileButton';
-import { LandingAuthProvider, useLandingAuth } from '../contexts/LandingAuthContext';
+import { useLandingAuth } from '../contexts/LandingAuthContext';
 import { PaymentSession } from '../services/paymentService';
 import { toast } from 'sonner';
 
@@ -32,7 +31,7 @@ interface LandingPageProps {
   onAuthSuccess?: (token: string, email: string, username: string, subscriptionType?: string) => void;
 }
 
-function LandingPageContent({ onGetStarted, onAuthSuccess, onNavigateToPricing, onNavigateToDocumentation, onNavigateToDownloads }: LandingPageProps) {
+function LandingPageContent({ onAuthSuccess, onNavigateToPricing, onNavigateToDocumentation, onNavigateToDownloads }: LandingPageProps) {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [currentTestimonial, setCurrentTestimonial] = useState(0);
@@ -44,6 +43,8 @@ function LandingPageContent({ onGetStarted, onAuthSuccess, onNavigateToPricing, 
   const [showLandingLogin, setShowLandingLogin] = useState(false);
   const [showLandingSignup, setShowLandingSignup] = useState(false);
   const { isAuthenticated } = useLandingAuth();
+  
+  console.log('🏠 LandingPage render - isAuthenticated:', isAuthenticated);
 
   
   const { trackPageView, trackEvent } = useAnalytics();
@@ -226,7 +227,9 @@ function LandingPageContent({ onGetStarted, onAuthSuccess, onNavigateToPricing, 
   };
 
   const handleGoToApp = () => {
-    onGetStarted?.();
+    // Redirect to the main MedMaster app using environment variable
+    const appUrl = import.meta.env.VITE_MAIN_APP_URL || 'http://localhost:5173';
+    window.open(appUrl, '_blank');
   };
 
   // Authentication handling functions for app login modal (separate from landing auth)
@@ -507,7 +510,7 @@ function LandingPageContent({ onGetStarted, onAuthSuccess, onNavigateToPricing, 
                   </div>
                   
                   <div className="absolute bottom-4 left-4 w-16 h-16 bg-gradient-to-r from-green-500 to-blue-500 rounded-xl flex items-center justify-center shadow-lg animate-float delay-1000">
-                    <StethoscopeIcon className="w-8 h-8 text-white" />
+                    <BrainIcon className="w-8 h-8 text-white" />
                   </div>
                   
                   <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-20 h-20 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center shadow-xl animate-pulse">
@@ -565,7 +568,7 @@ function LandingPageContent({ onGetStarted, onAuthSuccess, onNavigateToPricing, 
             {/* Clinical Cases */}
             <div className="bg-gray-800 rounded-xl p-8 hover:bg-gray-750 transition-all duration-300 transform hover:scale-105">
               <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center mb-6">
-                <StethoscopeIcon className="w-8 h-8 text-white" />
+                <BrainIcon className="w-8 h-8 text-white" />
               </div>
               <h3 className="text-2xl font-bold mb-4 text-white">Clinical Cases</h3>
               <p className="text-gray-400 mb-4">
@@ -931,43 +934,152 @@ function LandingPageContent({ onGetStarted, onAuthSuccess, onNavigateToPricing, 
             </p>
           </div>
           
-          <div className="flex flex-col md:flex-row justify-center items-center gap-8 max-w-4xl mx-auto">
-            <a 
-              href="mailto:contact@medmaster.com" 
-              className="w-full md:w-auto bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 text-white font-bold py-4 px-8 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg flex items-center justify-center gap-3 group"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 transition-transform duration-300 group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-              <span>contact@medmaster.com</span>
-            </a>
+          <div className="grid md:grid-cols-2 gap-12 max-w-6xl mx-auto">
+            {/* Contact Information */}
+            <div className="space-y-8">
+              <div className="bg-gray-800 rounded-xl p-6">
+                <h3 className="text-2xl font-bold text-white mb-6">Contact Information</h3>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
+                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-gray-400 text-sm">Email</p>
+                      <p className="text-white font-semibold">contact@medmaster.com</p>
+                    </div>
+                  </div>
+                  
+
+                  
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 bg-purple-600 rounded-lg flex items-center justify-center">
+                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-gray-400 text-sm">Office Address</p>
+                      <p className="text-white font-semibold">Peshawar, Khyber Pakhtunkhwa, 25000<br/>Pakistan</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
             
-            <a 
-              href="https://linkedin.com/company/medmaster" 
-              target="_blank" 
-              rel="noopener noreferrer" 
-              className="w-full md:w-auto bg-gradient-to-r from-blue-800 to-indigo-800 hover:from-blue-900 hover:to-indigo-900 text-white font-bold py-4 px-8 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg flex items-center justify-center gap-3 group"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 transition-transform duration-300 group-hover:scale-110" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
-              </svg>
-              <span>LinkedIn</span>
-            </a>
+            {/* Contact Actions */}
+            <div className="flex flex-col justify-center space-y-6">
+              <a 
+                href="mailto:contact@medmaster.com" 
+                className="w-full bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 text-white font-bold py-4 px-8 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg flex items-center justify-center gap-3 group"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 transition-transform duration-300 group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                <span>Send us an Email</span>
+              </a>
+              
+
+              
+              <a 
+                href="https://linkedin.com/company/medmaster" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="w-full bg-gradient-to-r from-blue-800 to-indigo-800 hover:from-blue-900 hover:to-indigo-900 text-white font-bold py-4 px-8 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg flex items-center justify-center gap-3 group"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 transition-transform duration-300 group-hover:scale-110" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
+                </svg>
+                <span>Connect on LinkedIn</span>
+              </a>
+            </div>
           </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="bg-black py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <div className="flex justify-center items-center mb-4">
-            <div className="w-8 h-8 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center mr-3">
-              <BugIcon className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-xl font-bold text-white">MedMaster</span>
-          </div>
-          <p className="text-gray-500">© 2025 MedMaster. Empowering the next generation of medical professionals.</p>
+      <footer className="bg-black py-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid md:grid-cols-4 gap-8 mb-8">
+            {/* Company Info */}
+            <div className="md:col-span-1">
+              <div className="flex items-center mb-4">
+                <div className="w-8 h-8 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center mr-3">
+                  <BugIcon className="w-4 h-4 text-white" />
+                </div>
+                <span className="text-xl font-bold text-white">MedMaster</span>
+              </div>
+              <p className="text-gray-400 text-sm mb-4">
+                Empowering the next generation of medical professionals with innovative learning solutions.
+              </p>
+              <div className="space-y-2 text-sm text-gray-400">
+                <p>MedMaster</p>
+                <p>Peshawar, Khyber Pakhtunkhwa, 25000</p>
+                <p>Pakistan</p>
 
+                <p>Email: contact@medmaster.com</p>
+              </div>
+            </div>
+            
+            {/* Quick Links */}
+            <div>
+              <h3 className="text-white font-semibold mb-4">Quick Links</h3>
+              <ul className="space-y-2 text-sm">
+                <li><button onClick={() => scrollToSection('features')} className="text-gray-400 hover:text-white transition-colors cursor-pointer">Features</button></li>
+                <li><button onClick={onNavigateToPricing} className="text-gray-400 hover:text-white transition-colors cursor-pointer">Pricing</button></li>
+                <li><button onClick={onNavigateToDocumentation} className="text-gray-400 hover:text-white transition-colors cursor-pointer">Documentation</button></li>
+                <li><button onClick={() => scrollToSection('contact')} className="text-gray-400 hover:text-white transition-colors cursor-pointer">Contact</button></li>
+              </ul>
+            </div>
+            
+            {/* Legal Pages */}
+            <div>
+              <h3 className="text-white font-semibold mb-4">Legal</h3>
+              <ul className="space-y-2 text-sm">
+                <li><a href="/privacy-policy" className="text-gray-400 hover:text-white transition-colors">Privacy Policy</a></li>
+                <li><a href="/terms-conditions" className="text-gray-400 hover:text-white transition-colors">Terms & Conditions</a></li>
+                <li><a href="/refund-policy" className="text-gray-400 hover:text-white transition-colors">Return/Refund Policy</a></li>
+                <li><a href="/service-policy" className="text-gray-400 hover:text-white transition-colors">Service Policy</a></li>
+              </ul>
+            </div>
+            
+            {/* Services */}
+            <div>
+              <h3 className="text-white font-semibold mb-4">Our Services</h3>
+              <ul className="space-y-2 text-sm text-gray-400">
+                <li>Quick Fire Mode (7,000+ Questions)</li>
+                <li>Clinical Cases (3,000+ Cases)</li>
+                <li>Gamified Learning System</li>
+                <li>Smart Spaced Repetition</li>
+                <li>Advanced Analytics</li>
+                <li>Competitive Leaderboards</li>
+                <li>Personalized Study Plans</li>
+                <li>Progress Tracking</li>
+              </ul>
+            </div>
+          </div>
+          
+          {/* Bottom Bar */}
+          <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center">
+            <p className="text-gray-500 text-sm mb-4 md:mb-0">
+              © 2025 MedMaster. All rights reserved. Empowering the next generation of medical professionals.
+            </p>
+            <div className="flex space-x-6">
+              <a href="https://linkedin.com/company/medmaster" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white transition-colors">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
+                </svg>
+              </a>
+              <a href="mailto:contact@medmaster.com" className="text-gray-400 hover:text-white transition-colors">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </a>
+            </div>
+          </div>
         </div>
       </footer>
 
@@ -1045,16 +1157,14 @@ function LandingPageContent({ onGetStarted, onAuthSuccess, onNavigateToPricing, 
   onAuthSuccess 
 }) => {
     return (
-      <LandingAuthProvider>
-        <LandingPageContent 
-          onGetStarted={onGetStarted} 
-          onLogin={onLogin}
-          onNavigateToPricing={onNavigateToPricing}
-          onNavigateToDocumentation={onNavigateToDocumentation}
-          onNavigateToDownloads={onNavigateToDownloads}
-          onAuthSuccess={onAuthSuccess} 
-        />
-      </LandingAuthProvider>
+      <LandingPageContent 
+        onGetStarted={onGetStarted} 
+        onLogin={onLogin}
+        onNavigateToPricing={onNavigateToPricing}
+        onNavigateToDocumentation={onNavigateToDocumentation}
+        onNavigateToDownloads={onNavigateToDownloads}
+        onAuthSuccess={onAuthSuccess} 
+      />
     );
   };
 

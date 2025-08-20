@@ -1,4 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useLandingAuth } from '../contexts/LandingAuthContext';
+import { API_ENDPOINTS } from '../config/api';
 import BrainIcon from './icons/BrainIcon';
 import FireIcon from './icons/FireIcon';
 import CrownIcon from './icons/CrownIcon';
@@ -10,17 +13,218 @@ interface PricingPageProps {
 
 function PricingPage({ onShowLandingLogin, onBackToLanding }: PricingPageProps) {
   const [paymentLoading, setPaymentLoading] = useState<string | null>(null);
+  const { user, isAuthenticated, refreshSubscriptionStatus } = useLandingAuth();
+  const navigate = useNavigate();
+
+  // Refresh subscription status when component mounts
+  useEffect(() => {
+    if (isAuthenticated) {
+      refreshSubscriptionStatus();
+    }
+  }, [isAuthenticated, refreshSubscriptionStatus]);
+
+  // Helper functions
+  const isActivePlan = (planType: 'demo' | 'starter' | 'popular') => {
+    if (!user) return false;
+    if (planType === 'demo') return user.subscriptionType === 'demo';
+    if (planType === 'starter') return user.subscriptionType === 'starter';
+    if (planType === 'popular') return user.subscriptionType === 'premium' || user.subscriptionType === 'popular';
+    return false;
+  };
+
+  const getButtonText = (planType: 'demo' | 'starter' | 'popular') => {
+    if (!isAuthenticated) {
+      if (planType === 'demo') return 'Try Demo - FREE';
+      if (planType === 'starter') return 'Start Learning - ₨700';
+      if (planType === 'popular') return 'Choose Premium - ₨1200';
+    }
+
+    if (isActivePlan(planType)) {
+      if (planType === 'demo') return 'Current Plan';
+      return 'Active Plan';
+    }
+
+    if (user?.subscriptionType === 'demo') {
+      if (planType === 'starter') return 'Upgrade to Starter - ₨700';
+      if (planType === 'popular') return 'Upgrade to Premium - ₨1200';
+    }
+
+    if (user?.subscriptionType === 'starter') {
+      if (planType === 'popular') return 'Upgrade to Premium - ₨1200';
+      if (planType === 'demo') return 'Downgrade to Demo';
+    }
+
+    if (user?.subscriptionType === 'premium' || user?.subscriptionType === 'popular') {
+      if (planType === 'starter') return 'Downgrade to Starter';
+      if (planType === 'demo') return 'Downgrade to Demo';
+    }
+
+    return 'Select Plan';
+  };
 
   // Payment handling functions
-  const handlePayment = async (planType: 'starter' | 'popular') => {
+  const handlePayment = async (planType: 'demo' | 'starter' | 'popular') => {
+    console.log('🔄 handlePayment called with planType:', planType);
+    console.log('🔐 isAuthenticated:', isAuthenticated);
+    console.log('👤 user:', user);
+    
     setPaymentLoading(planType);
-    // For the landing page, redirect to login or show a message
-    if (onShowLandingLogin) {
-      onShowLandingLogin();
-    } else {
-      alert('Please sign up or log in to purchase a plan.');
+    
+    try {
+      // If not authenticated, redirect to login
+      if (!isAuthenticated) {
+        console.log('❌ User not authenticated, showing login');
+        if (onShowLandingLogin) {
+          onShowLandingLogin();
+        } else {
+          console.log('⚠️ onShowLandingLogin not provided');
+        }
+        return;
+      }
+
+      const token = localStorage.getItem('medMasterToken') || localStorage.getItem('authToken');
+      console.log('🔑 Token check:', token ? 'Found' : 'Not found');
+      if (!token) {
+        console.log('❌ No token found, redirecting to login');
+        if (onShowLandingLogin) {
+          onShowLandingLogin();
+        } else {
+          console.log('⚠️ onShowLandingLogin not provided');
+        }
+        return;
+      }
+
+      // If clicking on current active plan, show unsubscribe option
+      if (isActivePlan(planType) && planType !== 'demo') {
+        const confirmUnsubscribe = window.confirm('Do you want to unsubscribe from your current plan?');
+        if (confirmUnsubscribe) {
+          const response = await fetch(API_ENDPOINTS.subscription.cancel, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (response.ok) {
+            await refreshSubscriptionStatus();
+            alert('Unsubscribed successfully! You now have demo access.');
+          } else {
+            const error = await response.json();
+            throw new Error(error.message || 'Failed to unsubscribe');
+          }
+        }
+        return;
+      }
+
+      // Handle plan changes
+      if (user) {
+        const currentPlan = user.subscriptionType;
+        const planIdMap = { starter: 1, popular: 2, premium: 2 };
+        
+        console.log('💳 Processing plan change:', {
+          planType,
+          currentPlan,
+          user: user.username
+        });
+        
+        if (planType === 'demo' && currentPlan !== 'demo') {
+          const confirmDowngrade = window.confirm('Are you sure you want to downgrade to Demo? You will lose access to premium features.');
+          if (confirmDowngrade) {
+            const response = await fetch(API_ENDPOINTS.subscription.cancel, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              }
+            });
+            
+            if (response.ok) {
+              await refreshSubscriptionStatus();
+              alert('Successfully downgraded to Demo plan!');
+            } else {
+              const error = await response.json();
+              throw new Error(error.message || 'Failed to downgrade');
+            }
+          }
+        } else if (planType === 'starter' && (currentPlan === 'premium' || currentPlan === 'popular')) {
+          const confirmDowngrade = window.confirm('Are you sure you want to downgrade to Starter? You will lose some premium features.');
+          if (confirmDowngrade) {
+            const response = await fetch(API_ENDPOINTS.subscription.downgrade, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ planId: planIdMap.starter })
+            });
+            
+            if (response.ok) {
+              await refreshSubscriptionStatus();
+              alert('Successfully downgraded to Starter plan!');
+            } else {
+              const error = await response.json();
+              throw new Error(error.message || 'Failed to downgrade');
+            }
+          }
+        } else if (planType === 'popular' && currentPlan !== 'premium' && currentPlan !== 'popular') {
+          if (currentPlan === 'demo') {
+            // Navigate to payment for new subscription
+            console.log('🚀 Navigating to payment page for premium plan');
+            console.log('📍 Current location before navigation:', window.location.href);
+            navigate('/payment?plan=premium');
+            console.log('✅ Navigation command executed');
+          } else {
+            // Upgrade from starter to premium
+            const response = await fetch(API_ENDPOINTS.subscription.upgrade, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ planId: planIdMap.popular })
+            });
+            
+            if (response.ok) {
+              await refreshSubscriptionStatus();
+              alert('Successfully upgraded to Premium plan!');
+            } else {
+              const error = await response.json();
+              throw new Error(error.message || 'Failed to upgrade');
+            }
+          }
+        } else if (planType === 'starter' && currentPlan === 'demo') {
+          // Navigate to payment for new subscription
+          console.log('🚀 Navigating to payment page for starter plan');
+          console.log('📍 Current location before navigation:', window.location.href);
+          navigate('/payment?plan=starter');
+          console.log('✅ Navigation command executed');
+        }
+      }
+    } catch (error) {
+      console.error('❌ Payment error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      const errorName = error instanceof Error ? error.name : 'Error';
+      
+      console.error('Error details:', {
+        message: errorMessage,
+        stack: errorStack,
+        name: errorName
+      });
+      // For authentication errors, redirect to login instead of showing alert
+      if (errorMessage && (errorMessage.includes('token') || errorMessage.includes('auth') || errorMessage.includes('login'))) {
+        console.log('🔐 Authentication error, redirecting to login');
+        if (onShowLandingLogin) {
+          onShowLandingLogin();
+        }
+      } else {
+        alert(`Operation failed: ${errorMessage || 'Please try again.'}`);
+      }
+    } finally {
+      console.log('🏁 Payment process finished, clearing loading state');
+      setPaymentLoading(null);
     }
-    setPaymentLoading(null);
   };
 
   return (
@@ -55,9 +259,101 @@ function PricingPage({ onShowLandingLogin, onBackToLanding }: PricingPageProps) 
             </p>
           </div>
           
-          <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+          <div className="grid md:grid-cols-3 gap-8 max-w-7xl mx-auto">
+            {/* Demo Plan */}
+            <div className={`bg-gray-800/50 backdrop-blur-sm rounded-2xl p-8 border transition-all duration-300 transform hover:scale-105 hover:shadow-2xl flex flex-col relative ${
+              isActivePlan('demo') 
+                ? 'border-green-400 border-2 shadow-green-400/20 shadow-2xl' 
+                : 'border-gray-700 hover:border-green-500'
+            }`}>
+              {isActivePlan('demo') && (
+                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                  <div className="bg-green-500 text-white px-4 py-1 rounded-full text-sm font-bold flex items-center shadow-lg">
+                    ✓ Active Plan
+                  </div>
+                </div>
+              )}
+              <div className="text-center flex flex-col h-full">
+                <div className="w-16 h-16 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+                  <span className="text-white text-2xl font-bold">🎯</span>
+                </div>
+                <h3 className="text-2xl font-bold mb-2 text-white">Demo Plan</h3>
+                <div className="mb-6">
+                  <span className="text-4xl font-bold text-green-400">FREE</span>
+                  <span className="text-gray-400 ml-2">/limited access</span>
+                </div>
+                <ul className="text-left space-y-3 mb-6">
+                  <li className="flex items-center">
+                    <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
+                      <span className="text-white text-xs">✓</span>
+                    </div>
+                    <span className="text-gray-200">Limited Content Access</span>
+                  </li>
+                  <li className="flex items-center">
+                    <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
+                      <span className="text-white text-xs">✓</span>
+                    </div>
+                    <span className="text-gray-200">Basic Analytics</span>
+                  </li>
+                  <li className="flex items-center">
+                    <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
+                      <span className="text-white text-xs">✓</span>
+                    </div>
+                    <span className="text-gray-200">50 Practice Questions</span>
+                  </li>
+                  <li className="flex items-center">
+                    <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
+                      <span className="text-white text-xs">✓</span>
+                    </div>
+                    <span className="text-gray-200">5 Case Studies</span>
+                  </li>
+                  <li className="flex items-center">
+                    <div className="w-5 h-5 bg-yellow-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
+                      <span className="text-white text-xs">⏰</span>
+                    </div>
+                    <span className="text-white font-semibold">7 days trial</span>
+                  </li>
+                </ul>
+                <button 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('🖱️ Demo button clicked');
+                    handlePayment('demo');
+                  }}
+                  disabled={paymentLoading === 'demo' || (isActivePlan('demo') && user?.subscriptionType === 'demo')}
+                  className={`mt-auto w-full font-bold py-4 px-6 rounded-full transition-all duration-300 flex items-center justify-center shadow-lg hover:shadow-xl relative z-10 ${
+                    isActivePlan('demo') 
+                      ? 'bg-gray-600 text-gray-300 cursor-not-allowed' 
+                      : 'bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white cursor-pointer'
+                  }`}
+                  style={{ pointerEvents: 'auto' }}
+                >
+                  {paymentLoading === 'demo' ? (
+                    <span>Processing...</span>
+                  ) : (
+                    <>
+                      {isActivePlan('demo') && <span className="mr-2">✓</span>}
+                      {getButtonText('demo')}
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
             {/* 3 Months Plan */}
-            <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-8 border border-gray-700 hover:border-blue-500 transition-all duration-300 transform hover:scale-105 hover:shadow-2xl flex flex-col">
+            <div className={`bg-gray-800/50 backdrop-blur-sm rounded-2xl p-8 border transition-all duration-300 transform hover:scale-105 hover:shadow-2xl flex flex-col relative ${
+              isActivePlan('starter') 
+                ? 'border-blue-400 border-2 shadow-blue-400/20 shadow-2xl' 
+                : 'border-gray-700 hover:border-blue-500'
+            }`}>
+              {isActivePlan('starter') && (
+                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                  <div className="bg-blue-500 text-white px-4 py-1 rounded-full text-sm font-bold flex items-center shadow-lg">
+                    ✓ Active Plan
+                  </div>
+                </div>
+              )}
               <div className="text-center flex flex-col h-full">
                 <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
                   <BrainIcon className="w-8 h-8 text-white" />
@@ -89,26 +385,49 @@ function PricingPage({ onShowLandingLogin, onBackToLanding }: PricingPageProps) 
                   </li>
                 </ul>
                 <button 
-                  onClick={() => handlePayment('starter')}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('🖱️ Starter button clicked');
+                    handlePayment('starter');
+                  }}
                   disabled={paymentLoading === 'starter'}
-                  className="mt-auto w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-full transition-all duration-300 flex items-center justify-center shadow-lg hover:shadow-xl"
+                  className={`mt-auto w-full font-bold py-4 px-6 rounded-full transition-all duration-300 flex items-center justify-center shadow-lg hover:shadow-xl relative z-10 ${
+                    isActivePlan('starter') 
+                      ? 'bg-blue-700 text-blue-100 border-2 border-blue-400' 
+                      : 'bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 disabled:opacity-50 disabled:cursor-not-allowed text-white cursor-pointer'
+                  }`}
+                  style={{ pointerEvents: 'auto' }}
                 >
                   {paymentLoading === 'starter' ? (
                     <span>Processing...</span>
                   ) : (
-                    'Start Learning - ₨700'
+                    <>
+                      {isActivePlan('starter') && <span className="mr-2">✓</span>}
+                      {getButtonText('starter')}
+                    </>
                   )}
                 </button>
               </div>
             </div>
 
             {/* 6 Months Plan - POPULAR */}
-            <div className="bg-gradient-to-br from-orange-500/20 to-red-500/20 backdrop-blur-sm rounded-2xl p-8 border-2 border-orange-400 transform scale-105 relative shadow-2xl flex flex-col">
+            <div className={`bg-gradient-to-br from-orange-500/20 to-red-500/20 backdrop-blur-sm rounded-2xl p-8 border-2 transform scale-105 relative shadow-2xl flex flex-col ${
+              isActivePlan('popular') 
+                ? 'border-orange-300 shadow-orange-400/30' 
+                : 'border-orange-400'
+            }`}>
               <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black px-6 py-2 rounded-full text-sm font-bold flex items-center shadow-lg">
-                  <FireIcon className="w-4 h-4 mr-1" />
-                  MOST POPULAR
-                </div>
+                {isActivePlan('popular') ? (
+                  <div className="bg-orange-500 text-white px-6 py-2 rounded-full text-sm font-bold flex items-center shadow-lg">
+                    ✓ ACTIVE PLAN
+                  </div>
+                ) : (
+                  <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black px-6 py-2 rounded-full text-sm font-bold flex items-center shadow-lg">
+                    <FireIcon className="w-4 h-4 mr-1" />
+                    MOST POPULAR
+                  </div>
+                )}
               </div>
               <div className="text-center flex flex-col h-full">
                 <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
@@ -162,14 +481,27 @@ function PricingPage({ onShowLandingLogin, onBackToLanding }: PricingPageProps) 
                   </li>
                 </ul>
                 <button 
-                  onClick={() => handlePayment('popular')}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('🖱️ Premium button clicked');
+                    handlePayment('popular');
+                  }}
                   disabled={paymentLoading === 'popular'}
-                  className="mt-auto w-full bg-white text-orange-500 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed font-bold py-4 px-6 rounded-full transition-all duration-300 flex items-center justify-center shadow-lg hover:shadow-xl"
+                  className={`mt-auto w-full font-bold py-4 px-6 rounded-full transition-all duration-300 flex items-center justify-center shadow-lg hover:shadow-xl relative z-10 ${
+                    isActivePlan('popular') 
+                      ? 'bg-orange-600 text-orange-100 border-2 border-orange-400' 
+                      : 'bg-white text-orange-500 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer'
+                  }`}
+                  style={{ pointerEvents: 'auto' }}
                 >
                   {paymentLoading === 'popular' ? (
                     <span>Processing...</span>
                   ) : (
-                    'Choose Premium - ₨1200'
+                    <>
+                      {isActivePlan('popular') && <span className="mr-2">✓</span>}
+                      {getButtonText('popular')}
+                    </>
                   )}
                 </button>
               </div>

@@ -76,32 +76,20 @@ const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
       console.log('✅ Backend response:', response.data);
       const { token, email, username, isNewUser } = response.data;
 
-      // Store token in landing auth context immediately
+      // Store authentication data in the format expected by LandingAuthContext
       localStorage.setItem('landingPageToken', token);
-      
-      // Store token temporarily to fetch subscription status
-      const originalToken = localStorage.getItem('medMasterToken');
       localStorage.setItem('medMasterToken', token);
+      localStorage.setItem('medMasterEmail', email);
+      localStorage.setItem('medMasterUsername', username);
       
       try {
         const subscriptionStatus = await subscriptionService.getSubscriptionStatus();
-        
-        // Restore original token
-        if (originalToken) {
-          localStorage.setItem('medMasterToken', originalToken);
-        } else {
-          localStorage.removeItem('medMasterToken');
-        }
         
         // Call onAuthSuccess callback if provided (for cross-origin scenarios)
         onAuthSuccess?.(token, email, username, subscriptionStatus.subscription_type);
         
         if (isNewUser) {
-          if (subscriptionStatus.subscription_type === 'demo') {
-            toast.success('Welcome to MedMaster! Your Google account has been connected. You have demo access to Gram Positive content.');
-          } else {
-            toast.success(`Welcome to MedMaster! Your Google account has been connected. You have ${subscriptionStatus.subscription_type} access.`);
-          }
+          toast.success('Welcome to MedMaster! Your Google account has been connected.');
         } else {
           toast.success('Successfully signed in with Google!');
         }
@@ -114,7 +102,7 @@ const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
         onAuthSuccess?.(token, email, username, 'demo');
         
         if (isNewUser) {
-          toast.success('Welcome to MedMaster! Your Google account has been connected. You have demo access to Gram Positive content.');
+          toast.success('Welcome to MedMaster! Your Google account has been connected.');
         } else {
           toast.success('Successfully signed in with Google!');
         }
@@ -162,24 +150,26 @@ const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
           localStorage.removeItem('medMasterToken');
         }
         
-        // Store token in landing page context
+        // Store authentication data in the format expected by LandingAuthContext
         localStorage.setItem('landingPageToken', authToken);
+        localStorage.setItem('medMasterToken', authToken);
+        localStorage.setItem('medMasterEmail', userEmail);
+        localStorage.setItem('medMasterUsername', userName);
         
         // Call onAuthSuccess callback if provided (for cross-origin scenarios)
         onAuthSuccess?.(authToken, userEmail, userName, subscriptionStatus.subscription_type);
         
-        // Show welcome message based on subscription type
-        if (subscriptionStatus.subscription_type === 'demo') {
-          toast.success('Welcome! You have demo access to Gram Positive content across all modes.');
-        } else {
-          toast.success(`Welcome back! You have ${subscriptionStatus.subscription_type} access.`);
-        }
+        // Show welcome message
+        toast.success('Welcome! Logged in successfully.');
         
         onSuccess?.();
       } catch (subscriptionError) {
         console.warn('Could not fetch subscription status:', subscriptionError);
         // Continue with login even if subscription fetch fails
         localStorage.setItem('landingPageToken', authToken);
+        localStorage.setItem('medMasterToken', authToken);
+        localStorage.setItem('medMasterEmail', userEmail);
+        localStorage.setItem('medMasterUsername', userName);
         
         // Call onAuthSuccess callback if provided (for cross-origin scenarios)
         onAuthSuccess?.(authToken, userEmail, userName, 'demo');

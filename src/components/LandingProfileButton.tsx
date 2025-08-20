@@ -112,6 +112,14 @@ const LandingProfileButton: React.FC<LandingProfileButtonProps> = ({ onGoToApp }
                 {getSubscriptionIcon()}
                 {getSubscriptionLabel()}
               </div>
+              {user.subscriptionType !== 'demo' && user.daysRemaining !== undefined && (
+                <div className="mt-2 text-xs text-gray-400">
+                  <div>Days remaining: <span className="text-white font-medium">{user.daysRemaining}</span></div>
+                  {user.endDate && (
+                    <div>Expires: <span className="text-white font-medium">{new Date(user.endDate).toLocaleDateString()}</span></div>
+                  )}
+                </div>
+              )}
             </div>
 
 

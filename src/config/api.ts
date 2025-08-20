@@ -3,8 +3,8 @@
  * Connects to the shared MedMaster backend
  */
 
-// Get API base URL from environment or fallback to production backend
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://your-backend-domain.com'; // Update this to your actual backend URL
+// Get API base URL from environment or fallback to local development server
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002'; // Local development server
 
 // API endpoints
 export const API_ENDPOINTS = {
@@ -15,6 +15,21 @@ export const API_ENDPOINTS = {
     registerFirebase: `${API_BASE_URL}/api/auth/register-firebase`,
     google: `${API_BASE_URL}/api/auth/google`,
     profile: `${API_BASE_URL}/api/auth/profile`,
+  },
+  
+  // Subscription
+  subscriptions: {
+    status: `${API_BASE_URL}/api/subscriptions/status`,
+    plans: `${API_BASE_URL}/api/subscriptions/plans`,
+    checkAccess: `${API_BASE_URL}/api/subscriptions/check-access`,
+  },
+  
+  // Subscription Management
+  subscription: {
+    cancel: `${API_BASE_URL}/api/subscriptions/cancel`,
+    upgrade: `${API_BASE_URL}/api/subscriptions/upgrade`,
+    downgrade: `${API_BASE_URL}/api/subscriptions/downgrade`,
+    status: `${API_BASE_URL}/api/subscriptions/status`,
   },
   
   // Payment

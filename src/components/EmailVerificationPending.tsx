@@ -49,18 +49,7 @@ const EmailVerificationPending: React.FC<EmailVerificationPendingProps> = ({
     }
   };
 
-  const handleOpenMailApp = () => {
-    // Try to open default mail app
-    const mailProviders = [
-      'mailto:', // Default mail app
-      'https://mail.google.com', // Gmail
-      'https://outlook.live.com', // Outlook
-      'https://mail.yahoo.com' // Yahoo Mail
-    ];
 
-    // Open default mail app
-    window.open(mailProviders[0], '_blank');
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 flex items-center justify-center p-4">
@@ -103,15 +92,6 @@ const EmailVerificationPending: React.FC<EmailVerificationPendingProps> = ({
           </div>
 
           <div className="space-y-4">
-            {/* Open Mail App Button */}
-            <button
-              onClick={handleOpenMailApp}
-              className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium py-3 px-6 rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
-            >
-              <Mail className="w-5 h-5" />
-              Open Mail App
-            </button>
-
             {/* Resend Email Button */}
             <button
               onClick={handleResendEmail}

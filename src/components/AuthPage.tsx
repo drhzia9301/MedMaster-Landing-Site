@@ -56,12 +56,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ onAuthSuccess, onBackToLanding, ini
         
         onAuthSuccess(token, email, username, subscriptionStatus.subscription_type);
         
-        // Show welcome message based on subscription type
-        if (subscriptionStatus.subscription_type === 'demo') {
-          toast.success('Welcome! You have demo access to Gram Positive content across all modes.');
-        } else {
-          toast.success(`Welcome back! You have ${subscriptionStatus.subscription_type} access.`);
-        }
+        // Show welcome message
+        toast.success('Welcome! Logged in successfully.');
       } catch (subscriptionError) {
         console.warn('Could not fetch subscription status:', subscriptionError);
         // Continue with login even if subscription fetch fails
@@ -119,12 +115,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ onAuthSuccess, onBackToLanding, ini
         const subscriptionStatus = await subscriptionService.getSubscriptionStatus();
         onAuthSuccess(authToken, userEmail, userName, subscriptionStatus.subscription_type);
         
-        // Show welcome message based on subscription type
-        if (subscriptionStatus.subscription_type === 'demo') {
-          toast.success('Welcome! You have demo access to Gram Positive content across all modes.');
-        } else {
-          toast.success(`Welcome back! You have ${subscriptionStatus.subscription_type} access.`);
-        }
+        // Show welcome message
+        toast.success('Welcome! Logged in successfully.');
       } catch (subscriptionError) {
         console.warn('Could not fetch subscription status:', subscriptionError);
         // Continue with login even if subscription fetch fails

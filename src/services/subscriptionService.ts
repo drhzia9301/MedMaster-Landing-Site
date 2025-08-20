@@ -63,9 +63,9 @@ class SubscriptionService {
         };
       }
 
-      console.log('Making API request to:', API_ENDPOINTS.auth.profile);
+      console.log('Making API request to:', API_ENDPOINTS.subscriptions.status);
       const response = await axios.get(
-        API_ENDPOINTS.auth.profile,
+        API_ENDPOINTS.subscriptions.status,
         createAuthConfig(token)
       );
 

@@ -53,6 +53,23 @@ const LandingSignupPage: React.FC<LandingSignupPageProps> = ({
     checkRedirectResult();
   }, []);
 
+  // Hide browser password reveal buttons
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      input[type="password"]::-ms-reveal,
+      input[type="password"]::-ms-clear,
+      input[type="password"]::-webkit-credentials-auto-fill-button {
+        display: none;
+      }
+    `;
+    document.head.appendChild(style);
+    
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
+
   const handleGoogleSignIn = async (credential: string) => {
     setError(null);
     setLoading(true);
@@ -62,22 +79,14 @@ const LandingSignupPage: React.FC<LandingSignupPageProps> = ({
       const response = await axios.post(API_ENDPOINTS.auth.google, { credential });
       const { token, email, username, isNewUser } = response.data;
 
-      // Store token in landing auth context immediately
+      // Store authentication data in the format expected by LandingAuthContext
       localStorage.setItem('landingPageToken', token);
-      
-      // Store token temporarily to fetch subscription status
-      const originalToken = localStorage.getItem('medMasterToken');
       localStorage.setItem('medMasterToken', token);
+      localStorage.setItem('medMasterEmail', email);
+      localStorage.setItem('medMasterUsername', username);
       
       try {
         const subscriptionStatus = await subscriptionService.getSubscriptionStatus();
-        
-        // Restore original token
-        if (originalToken) {
-          localStorage.setItem('medMasterToken', originalToken);
-        } else {
-          localStorage.removeItem('medMasterToken');
-        }
         
         // Complete login immediately for both new and existing users
         login(token, email, username, subscriptionStatus.subscription_type);
@@ -87,11 +96,7 @@ const LandingSignupPage: React.FC<LandingSignupPageProps> = ({
         }
         
         if (isNewUser) {
-          if (subscriptionStatus.subscription_type === 'demo') {
-            toast.success('Welcome to MedMaster! Your Google account has been connected. You have demo access to Gram Positive content.');
-          } else {
-            toast.success(`Welcome to MedMaster! Your Google account has been connected. You have ${subscriptionStatus.subscription_type} access.`);
-          }
+          toast.success('Welcome to MedMaster! Your Google account has been connected.');
         } else {
           toast.success('Successfully signed in with Google!');
         }
@@ -108,7 +113,7 @@ const LandingSignupPage: React.FC<LandingSignupPageProps> = ({
         }
         
         if (isNewUser) {
-          toast.success('Welcome to MedMaster! Your Google account has been connected. You have demo access to Gram Positive content.');
+          toast.success('Welcome to MedMaster! Your Google account has been connected.');
         } else {
           toast.success('Successfully signed in with Google!');
         }
@@ -307,7 +312,8 @@ const LandingSignupPage: React.FC<LandingSignupPageProps> = ({
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full bg-gray-700/50 border border-gray-600 text-white rounded-lg p-3 pr-12 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300"
+                  autoComplete="new-password"
+                  className="w-full bg-gray-700/50 border border-gray-600 text-white rounded-lg p-3 pr-12 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 appearance-none"
                   placeholder="Create a password"
                 />
                 <button
