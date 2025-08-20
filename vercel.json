@@ -12,13 +12,7 @@
       "destination": "/index.html"
     }
   ],
-  "redirects": [
-    {
-      "source": "/www/(.*)",
-      "destination": "/$1",
-      "permanent": true
-    }
-  ],
+
   "headers": [
     {
       "source": "/api/(.*)",
