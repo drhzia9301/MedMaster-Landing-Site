@@ -1,6 +1,7 @@
 {
   "version": 2,
   "buildCommand": "npm run build",
+  // Force redeploy to fix function runtime error
   "rewrites": [
     {
       "source": "/(.*)",
