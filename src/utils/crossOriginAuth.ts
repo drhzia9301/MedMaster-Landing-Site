@@ -7,6 +7,7 @@ export interface AuthData {
   token: string;
   email: string;
   username: string;
+  userId: number;
   subscriptionType?: string;
 }
 
@@ -44,6 +45,7 @@ export class CrossOriginAuth {
     localStorage.setItem('landingPageUser', JSON.stringify({
       username: authData.username,
       email: authData.email,
+      userId: authData.userId,
       subscriptionType: authData.subscriptionType || 'demo'
     }));
 
@@ -52,6 +54,7 @@ export class CrossOriginAuth {
     localStorage.setItem(this.config.userKey, JSON.stringify({
       username: authData.username,
       email: authData.email,
+      userId: authData.userId,
       subscriptionType: authData.subscriptionType || 'demo'
     }));
   }
@@ -73,6 +76,7 @@ export class CrossOriginAuth {
         token,
         email: userData.email,
         username: userData.username,
+        userId: userData.userId || 0,
         subscriptionType: userData.subscriptionType
       };
     } catch (error) {
@@ -116,6 +120,7 @@ export class CrossOriginAuth {
     const token = urlParams.get('token');
     const email = urlParams.get('email');
     const username = urlParams.get('username');
+    const userId = urlParams.get('userId');
     const subscriptionType = urlParams.get('subscriptionType');
 
     if (!token || !email || !username) {
@@ -126,6 +131,7 @@ export class CrossOriginAuth {
       token,
       email,
       username,
+      userId: userId ? parseInt(userId, 10) : 0,
       subscriptionType: subscriptionType || 'demo'
     };
   }

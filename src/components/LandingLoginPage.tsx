@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { API_ENDPOINTS } from '../config/api';
+import { authService } from '../services/authService';
 import { subscriptionService } from '../services/subscriptionService';
 import { toast } from 'sonner';
 
 import BugIcon from './icons/BugIcon';
 import GoogleSignIn from './GoogleSignIn';
+import EmailVerificationPending from './EmailVerificationPending';
 import { handleRedirectResult } from '../config/firebase';
 import { ArrowRight, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 
@@ -13,7 +13,7 @@ interface LandingLoginPageProps {
   onSuccess?: () => void;
   onBackToLanding?: () => void;
   onSwitchToSignup?: () => void;
-  onAuthSuccess?: (token: string, email: string, username: string, subscriptionType?: string) => void;
+  onAuthSuccess?: (token: string, email: string, username: string, subscriptionType?: string, userId?: number) => void;
 }
 
 const LandingLoginPage: React.FC<LandingLoginPageProps> = ({ 
@@ -22,11 +22,12 @@ const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
   onSwitchToSignup,
   onAuthSuccess
 }) => {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [needsVerification, setNeedsVerification] = useState(false);
 
   // Add CSS to hide browser-native password reveal buttons
   useEffect(() => {
@@ -65,16 +66,24 @@ const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
     checkRedirectResult();
   }, []);
 
-  const handleGoogleSignIn = async (credential: string) => {
+  const handleGoogleSignIn = async (userData: any) => {
     setError(null);
     setLoading(true);
 
     try {
-      console.log('🔐 Sending Google credential to backend...');
-      // Send the Google credential to your backend
-      const response = await axios.post(API_ENDPOINTS.auth.google, { credential });
-      console.log('✅ Backend response:', response.data);
-      const { token, email, username, isNewUser } = response.data;
+      console.log('🔐 Sending Google user data to auth service...');
+      // Use auth service for Google authentication
+      const result = await authService.registerFirebase(userData);
+      console.log('✅ Supabase response:', result);
+      
+      if (!result.success || !result.user || !result.token) {
+        throw new Error(result.error || 'Google authentication failed');
+      }
+      
+      const { token, user } = result;
+      const { email, username } = user;
+      const userId = (result as any).userId || user.id || 0;
+      const isNewUser = (result as any).isNewUser || false;
 
       // Store authentication data in the format expected by LandingAuthContext
       localStorage.setItem('landingPageToken', token);
@@ -86,7 +95,7 @@ const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
         const subscriptionStatus = await subscriptionService.getSubscriptionStatus();
         
         // Call onAuthSuccess callback if provided (for cross-origin scenarios)
-        onAuthSuccess?.(token, email, username, subscriptionStatus.subscription_type);
+        onAuthSuccess?.(token, email, username, subscriptionStatus.subscription_type, userId);
         
         if (isNewUser) {
           toast.success('Welcome to MedMaster! Your Google account has been connected.');
@@ -99,7 +108,7 @@ const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
         console.warn('Could not fetch subscription status:', subscriptionError);
         
         // Call onAuthSuccess callback if provided (for cross-origin scenarios)
-        onAuthSuccess?.(token, email, username, 'demo');
+        onAuthSuccess?.(token, email, username, 'demo', userId);
         
         if (isNewUser) {
           toast.success('Welcome to MedMaster! Your Google account has been connected.');
@@ -110,11 +119,18 @@ const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
         onSuccess?.();
       }
     } catch (err: any) {
-      if (axios.isAxiosError(err) && err.response) {
-        setError(err.response.data.message || 'Google sign-in failed.');
-      } else {
-        setError('An unknown error occurred during Google sign-in.');
+      console.error('Google Sign-In backend error:', err);
+      
+      let errorMessage = 'An error occurred during Google sign-in';
+      
+      if (err.message) {
+        errorMessage = err.message;
+      } else if (err.code === 'ERR_NETWORK' || err.code === 'ERR_NAME_NOT_RESOLVED') {
+        errorMessage = 'Unable to connect to the server. Please check your internet connection and try again.';
       }
+      
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -130,63 +146,74 @@ const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
     setLoading(true);
 
     try {
-      const response = await axios.post(API_ENDPOINTS.auth.login, { username, password });
-      const authToken = response.data.token;
-      const userEmail = response.data.email;
-      const userName = response.data.username;
-
-      // Store token temporarily to fetch subscription status
-      const originalToken = localStorage.getItem('medMasterToken');
-      localStorage.setItem('medMasterToken', authToken);
+      // Add timeout to prevent hanging
+      const loginPromise = authService.login({ email, password });
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Login timeout - please try again')), 15000)
+      );
       
-      // Fetch subscription status after successful authentication
+      const result = await Promise.race([loginPromise, timeoutPromise]) as any;
+      
+      if (!result.success || !result.user || !result.token) {
+        throw new Error(result.error || 'Login failed');
+      }
+      
+      const authToken = result.token;
+      const userEmail = result.user.email;
+      const userName = result.user.username;
+      const userId = result.user.id || 0;
+
+      // Store authentication data immediately to prevent loss
+      localStorage.setItem('landingPageToken', authToken);
+      localStorage.setItem('medMasterToken', authToken);
+      localStorage.setItem('medMasterEmail', userEmail);
+      localStorage.setItem('medMasterUsername', userName);
+      
+      // Fetch subscription status with timeout and fallback
+      let subscriptionType = 'demo';
       try {
-        const subscriptionStatus = await subscriptionService.getSubscriptionStatus();
+        const subscriptionPromise = subscriptionService.getSubscriptionStatus(parseInt(userId as string, 10));
+        const subscriptionTimeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Subscription fetch timeout')), 5000)
+        );
         
-        // Restore original token
-        if (originalToken) {
-          localStorage.setItem('medMasterToken', originalToken);
-        } else {
-          localStorage.removeItem('medMasterToken');
-        }
-        
-        // Store authentication data in the format expected by LandingAuthContext
-        localStorage.setItem('landingPageToken', authToken);
-        localStorage.setItem('medMasterToken', authToken);
-        localStorage.setItem('medMasterEmail', userEmail);
-        localStorage.setItem('medMasterUsername', userName);
-        
-        // Call onAuthSuccess callback if provided (for cross-origin scenarios)
-        onAuthSuccess?.(authToken, userEmail, userName, subscriptionStatus.subscription_type);
-        
-        // Show welcome message
-        toast.success('Welcome! Logged in successfully.');
-        
-        onSuccess?.();
+        const subscriptionStatus = await Promise.race([subscriptionPromise, subscriptionTimeoutPromise]) as any;
+        subscriptionType = subscriptionStatus.subscription_type || 'demo';
       } catch (subscriptionError) {
-        console.warn('Could not fetch subscription status:', subscriptionError);
-        // Continue with login even if subscription fetch fails
-        localStorage.setItem('landingPageToken', authToken);
-        localStorage.setItem('medMasterToken', authToken);
-        localStorage.setItem('medMasterEmail', userEmail);
-        localStorage.setItem('medMasterUsername', userName);
-        
-        // Call onAuthSuccess callback if provided (for cross-origin scenarios)
-        onAuthSuccess?.(authToken, userEmail, userName, 'demo');
-        
-        toast.success('Welcome! Logged in successfully.');
-        onSuccess?.();
+        console.warn('Could not fetch subscription status, using demo:', subscriptionError);
+        // Continue with demo subscription as fallback
       }
+      
+      // Call onAuthSuccess callback if provided (for cross-origin scenarios)
+      onAuthSuccess?.(authToken, userEmail, userName, subscriptionType, parseInt(userId as string, 10));
+      
+      // Show welcome message
+      toast.success('Welcome! Logged in successfully.');
+      
+      onSuccess?.();
     } catch (err: any) {
-      if (axios.isAxiosError(err) && err.response) {
-        setError(err.response.data.message || 'An error occurred.');
-      } else {
-        setError('An unknown error occurred. Is the server running?');
-      }
+      setError(err.message || 'Authentication failed');
+      setNeedsVerification(err.needsVerification || false);
     } finally {
       setLoading(false);
     }
   };
+
+  // Show verification pending screen if needed
+  if (needsVerification) {
+    return (
+      <EmailVerificationPending
+        email={email}
+        onBackToLogin={() => {
+          setNeedsVerification(false);
+          setError(null);
+        }}
+        onResendSuccess={() => {
+          toast.success('Verification email sent! Please check your inbox.');
+        }}
+      />
+    );
+  }
 
   return (
     <>
@@ -220,17 +247,17 @@ const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
 
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="landing-login-username">
-                  Username
+                <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="landing-login-email">
+                  Email
                 </label>
                 <input
-                  id="landing-login-username"
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  id="landing-login-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   required
                   className="w-full bg-gray-700/50 border border-gray-600 text-white rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300"
-                  placeholder="Enter your username"
+                  placeholder="Enter your email"
                 />
               </div>
               

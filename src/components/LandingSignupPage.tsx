@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { API_ENDPOINTS } from '../config/api';
+import { authService } from '../services/authService';
 import { subscriptionService } from '../services/subscriptionService';
 import { toast } from 'sonner';
 import { useLandingAuth } from '../contexts/LandingAuthContext';
-import { signUpWithEmailAndPassword, handleRedirectResult } from '../config/firebase';
+import { handleRedirectResult } from '../config/firebase';
 
 import BugIcon from './icons/BugIcon';
 import GoogleSignIn from './GoogleSignIn';
@@ -15,7 +14,7 @@ interface LandingSignupPageProps {
   onSuccess?: () => void;
   onBackToLanding?: () => void;
   onSwitchToLogin?: () => void;
-  onAuthSuccess?: (token: string, email: string, username: string, subscriptionType?: string) => void;
+  onAuthSuccess?: (token: string, email: string, username: string, subscriptionType?: string, userId?: number) => void;
 }
 
 const LandingSignupPage: React.FC<LandingSignupPageProps> = ({ 
@@ -24,7 +23,6 @@ const LandingSignupPage: React.FC<LandingSignupPageProps> = ({
   onSwitchToLogin,
   onAuthSuccess
 }) => {
-  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -70,14 +68,22 @@ const LandingSignupPage: React.FC<LandingSignupPageProps> = ({
     };
   }, []);
 
-  const handleGoogleSignIn = async (credential: string) => {
+  const handleGoogleSignIn = async (userData: any) => {
     setError(null);
     setLoading(true);
 
     try {
-      // Send the Google credential to your backend
-      const response = await axios.post(API_ENDPOINTS.auth.google, { credential });
-      const { token, email, username, isNewUser } = response.data;
+      // Use auth service for Google authentication
+      const result = await authService.registerFirebase(userData);
+      
+      if (!result.success || !result.user || !result.token) {
+        throw new Error(result.error || 'Google authentication failed');
+      }
+      
+      const { token, user } = result;
+      const { email, username } = user;
+      const userId = (result as any).userId || user.id || 0;
+      const isNewUser = (result as any).isNewUser || false;
 
       // Store authentication data in the format expected by LandingAuthContext
       localStorage.setItem('landingPageToken', token);
@@ -89,10 +95,10 @@ const LandingSignupPage: React.FC<LandingSignupPageProps> = ({
         const subscriptionStatus = await subscriptionService.getSubscriptionStatus();
         
         // Complete login immediately for both new and existing users
-        login(token, email, username, subscriptionStatus.subscription_type);
+        login(token, email, username, userId, subscriptionStatus.subscription_type);
         
         if (onAuthSuccess) {
-          onAuthSuccess(token, email, username, subscriptionStatus.subscription_type);
+          onAuthSuccess(token, email, username, subscriptionStatus.subscription_type, userId);
         }
         
         if (isNewUser) {
@@ -106,10 +112,10 @@ const LandingSignupPage: React.FC<LandingSignupPageProps> = ({
         console.warn('Could not fetch subscription status:', subscriptionError);
         
         // Complete login immediately for both new and existing users
-        login(token, email, username, 'demo');
+        login(token, email, username, userId, 'demo');
         
         if (onAuthSuccess) {
-          onAuthSuccess(token, email, username, 'demo');
+          onAuthSuccess(token, email, username, 'demo', userId);
         }
         
         if (isNewUser) {
@@ -121,8 +127,12 @@ const LandingSignupPage: React.FC<LandingSignupPageProps> = ({
         onSuccess?.();
       }
     } catch (err: any) {
-      if (axios.isAxiosError(err) && err.response) {
-        setError(err.response.data.message || 'Google sign-in failed.');
+      console.error('Google Sign-In backend error:', err);
+      
+      if (err.message) {
+        setError(err.message);
+      } else if (err.code === 'ERR_NETWORK' || err.code === 'ERR_NAME_NOT_RESOLVED') {
+        setError('Unable to connect to the server. Please check your internet connection and try again.');
       } else {
         setError('An unknown error occurred during Google sign-in.');
       }
@@ -141,33 +151,31 @@ const LandingSignupPage: React.FC<LandingSignupPageProps> = ({
     setLoading(true);
 
     try {
-      // Use Firebase for email/password authentication with verification
-      const firebaseResult = await signUpWithEmailAndPassword(email, password, username);
+      // Use Firebase auth service for registration with email verification
+      const result = await authService.register({ email, password });
       
-      if (firebaseResult.needsVerification) {
-        // Show verification pending screen
+      if (!result.success) {
+        throw new Error(result.error || 'Registration failed');
+      }
+      
+      // Check if email verification is needed (Supabase sends verification email automatically)
+      if (result.needsVerification) {
+        // User created but needs email verification
         setPendingEmail(email);
         setShowVerificationPending(true);
-        toast.success('Account created! Please check your email to verify your account.');
+        toast.success(result.message || 'Account created! Please check your email to verify your account before logging in.');
         setLoading(false);
         return;
       }
       
-      // If email is already verified (shouldn't happen for new signups), continue with backend registration
-      const response = await axios.post(API_ENDPOINTS.auth.registerFirebase, {
-        credential: firebaseResult.idToken,
-        email: firebaseResult.user.email,
-        username: username
-      });
-      
-      const { token } = response.data;
-      
-      if (response.data.needsVerification) {
-        setPendingEmail(email);
-        setShowVerificationPending(true);
-        toast.success('Account created! Please check your email to verify your account.');
-        return;
+      // Auto-login after successful registration
+      const loginResult = await authService.login({ email, password });
+      if (!loginResult.success || !loginResult.token) {
+        throw new Error('Registration successful but login failed');
       }
+      
+      const { token } = loginResult;
+      const userId = (loginResult as any).userId || (loginResult as any).user?.id || 0;
       
       // Store token temporarily to fetch subscription status
       const originalToken = localStorage.getItem('medMasterToken');
@@ -183,20 +191,26 @@ const LandingSignupPage: React.FC<LandingSignupPageProps> = ({
           localStorage.removeItem('medMasterToken');
         }
         
+        // Generate username from email for compatibility
+        const username = email.split('@')[0];
+        
         // Use landing page auth context
-        login(token, email, username, subscriptionStatus.subscription_type);
+        login(token, email, username, userId, subscriptionStatus.subscription_type);
         
         // Call onAuthSuccess callback if provided (for cross-origin scenarios)
-        onAuthSuccess?.(token, email, username, subscriptionStatus.subscription_type);
+        onAuthSuccess?.(token, email, username, subscriptionStatus.subscription_type, userId);
         
         toast.success('Welcome to MedMaster! Your account has been created and verified.');
         onSuccess?.();
       } catch (subscriptionError) {
         console.warn('Could not fetch subscription status:', subscriptionError);
-        login(token, email, username, 'demo');
+        // Generate username from email for compatibility
+        const username = email.split('@')[0];
+        
+        login(token, email, username, userId, 'demo');
         
         // Call onAuthSuccess callback if provided (for cross-origin scenarios)
-        onAuthSuccess?.(token, email, username, 'demo');
+        onAuthSuccess?.(token, email, username, 'demo', userId);
         
         toast.success('Welcome to MedMaster! Account created successfully.');
         onSuccess?.();
@@ -212,8 +226,8 @@ const LandingSignupPage: React.FC<LandingSignupPageProps> = ({
         errorMessage = 'Password is too weak. Please choose a stronger password.';
       } else if (err.code === 'auth/invalid-email') {
         errorMessage = 'Please enter a valid email address.';
-      } else if (axios.isAxiosError(err) && err.response) {
-        errorMessage = err.response.data.message || 'An error occurred.';
+      } else if (err.message) {
+        errorMessage = err.message;
       }
       
       setError(errorMessage);
@@ -271,21 +285,6 @@ const LandingSignupPage: React.FC<LandingSignupPageProps> = ({
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="landing-signup-username">
-                Username
-              </label>
-              <input
-                id="landing-signup-username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                className="w-full bg-gray-700/50 border border-gray-600 text-white rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300"
-                placeholder="Choose a username"
-              />
-            </div>
-            
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="landing-signup-email">
                 Email

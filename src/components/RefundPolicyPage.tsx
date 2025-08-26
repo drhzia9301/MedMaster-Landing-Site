@@ -165,7 +165,7 @@ const RefundPolicyPage: React.FC<RefundPolicyPageProps> = ({ onBackToLanding }) 
               <h2 className="text-2xl font-semibold text-white mb-4">10. Dispute Resolution</h2>
               <p>
                 If you disagree with our refund decision, you may escalate the matter by contacting our management team 
-                at <strong>contact@medmaster.com</strong>. We will review your case within 7 business days.
+                at <strong>contact@medmaster.site</strong>. We will review your case within 7 business days.
               </p>
             </section>
 
@@ -183,7 +183,7 @@ const RefundPolicyPage: React.FC<RefundPolicyPageProps> = ({ onBackToLanding }) 
                 For refund requests or questions about this policy:
               </p>
               <div className="bg-gray-800/50 rounded-lg p-4 space-y-2">
-                <p><strong>Email:</strong> contact@medmaster.com</p>
+                <p><strong>Email:</strong> contact@medmaster.site</p>
                 <p><strong>Address:</strong> Peshawar, Khyber Pakhtunkhwa, 25000, Pakistan</p>
 
               </div>

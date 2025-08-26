@@ -1,5 +1,5 @@
-import axios from 'axios';
-import { API_ENDPOINTS, createAuthConfig } from '../config/api';
+import { API_ENDPOINTS } from '../config/api';
+import { supabaseHelpers } from '../config/supabase';
 
 export interface SubscriptionStatus {
   subscription_type: 'demo' | 'starter' | 'popular' | 'premium';
@@ -38,7 +38,7 @@ class SubscriptionService {
   /**
    * Get user's current subscription status
    */
-  async getSubscriptionStatus(): Promise<SubscriptionStatus> {
+  async getSubscriptionStatus(_userId?: number): Promise<SubscriptionStatus> {
     // In dev mode, return premium subscription with active status
     if (this.isDevMode()) {
       console.log('Running in dev mode, returning premium subscription');
@@ -53,45 +53,43 @@ class SubscriptionService {
 
     try {
       const token = localStorage.getItem('medMasterToken');
-      console.log('Token exists:', !!token);
       
       if (!token) {
-        console.log('No authentication token found, returning demo status');
+        // No token means demo user
         return {
           subscription_type: 'demo',
           status: null
         };
       }
 
-      console.log('Making API request to:', API_ENDPOINTS.subscriptions.status);
-      const response = await axios.get(
-        API_ENDPOINTS.subscriptions.status,
-        createAuthConfig(token)
-      );
+      const response = await fetch(API_ENDPOINTS.subscription.status, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
 
-      console.log('Subscription API response:', response.data);
+      if (!response.ok) {
+        console.warn('Could not fetch subscription status:', response.status, response.statusText);
+        // Default to demo if API call fails
+        return {
+          subscription_type: 'demo',
+          status: null
+        };
+      }
+
+      const data = await response.json();
       
-      // Handle the nested response format from the server
-      const subscriptionData = response.data.subscription || response.data;
-      
-      // Map the server response to our expected format
       return {
-        subscription_type: subscriptionData.subscription_type || 'demo',
-        status: subscriptionData.status,
-        plan_name: subscriptionData.plan_name,
-        end_date: subscriptionData.end_date,
-        days_remaining: subscriptionData.end_date ? 
-          Math.max(0, Math.ceil((new Date(subscriptionData.end_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))) : 
-          undefined
+        subscription_type: data.subscription_type || 'demo',
+        status: data.status || null,
+        plan_name: data.plan_name,
+        end_date: data.end_date,
+        days_remaining: data.days_remaining
       };
     } catch (error: any) {
       console.error('Error fetching subscription status:', error);
-      console.log('Error details:', {
-        message: error.message,
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data
-      });
       
       // Return demo status as fallback
       return {
@@ -101,8 +99,70 @@ class SubscriptionService {
     }
   }
 
-  // Note: Usage statistics methods removed as they are no longer needed
-  // Daily usage tracking has been disabled for all subscription types
+  /**
+   * Get user's usage statistics
+   */
+  async getUsageStats(userId?: number): Promise<UsageStats> {
+    // In dev mode, return unlimited usage
+    if (this.isDevMode()) {
+      return {
+        questions_today: 0,
+        clinical_cases_today: 0,
+        questions_limit: 999,
+        clinical_cases_limit: 999,
+        subscription_type: 'premium'
+      };
+    }
+
+    if (!userId) {
+      // Return demo limits if no user ID
+      return {
+        questions_today: 0,
+        clinical_cases_today: 0,
+        questions_limit: 10,
+        clinical_cases_limit: 2,
+        subscription_type: 'demo'
+      };
+    }
+
+    try {
+      // Get user's subscription status
+      const subscriptionStatus = await this.getSubscriptionStatus(userId);
+      
+      // Get today's usage from user_analytics or daily_usage table
+      const { data: analytics, error } = await supabaseHelpers.getUserAnalytics(userId);
+      
+      let questionsToday = 0;
+      let clinicalCasesToday = 0;
+      
+      if (!error && analytics) {
+        // Filter today's data if available
+        questionsToday = analytics.questions_answered_today || 0;
+        clinicalCasesToday = analytics.clinical_cases_completed_today || 0;
+      }
+      
+      // Get limits based on subscription type
+      const limits = this.getFeatureLimits(subscriptionStatus.subscription_type as any);
+      
+      return {
+        questions_today: questionsToday,
+        clinical_cases_today: clinicalCasesToday,
+        questions_limit: limits.questions_per_day,
+        clinical_cases_limit: limits.clinical_cases_per_day,
+        subscription_type: subscriptionStatus.subscription_type
+      };
+    } catch (error) {
+      console.error('Error fetching usage stats:', error);
+      // Return demo limits as fallback
+      return {
+        questions_today: 0,
+        clinical_cases_today: 0,
+        questions_limit: 10,
+        clinical_cases_limit: 2,
+        subscription_type: 'demo'
+      };
+    }
+  }
 
   /**
    * Check if user has access to a specific feature
@@ -151,30 +211,45 @@ class SubscriptionService {
    */
   async getSubscriptionPlans() {
     try {
-      // For landing page, return mock plans for now
-      return [
-        {
-          id: 1,
-          name: 'Demo',
-          price: 0,
-          description: 'Limited access to Gram Positive content'
-        },
-        {
-          id: 2,
-          name: 'Starter',
-          price: 999,
-          description: 'Full access to all content'
-        },
-        {
-          id: 3,
-          name: 'Popular',
-          price: 1999,
-          description: 'Full access plus premium features'
-        }
-      ];
+      const { data: plans, error } = await supabaseHelpers.getSubscriptionPlans();
+      
+      if (error) {
+        throw new Error('Failed to fetch subscription plans');
+      }
+      
+      return {
+        success: true,
+        plans: plans || []
+      };
     } catch (error: any) {
       console.error('Error fetching subscription plans:', error);
-      return [];
+      // Return default plans as fallback
+      return {
+        success: true,
+        plans: [
+          {
+            id: 1,
+            name: 'Starter',
+            price: 9.99,
+            duration: '1 month',
+            features: ['Basic features', 'Limited questions']
+          },
+          {
+            id: 2,
+            name: 'Popular',
+            price: 19.99,
+            duration: '1 month',
+            features: ['All features', 'Unlimited questions']
+          },
+          {
+            id: 3,
+            name: 'Premium',
+            price: 29.99,
+            duration: '1 month',
+            features: ['All features', 'Priority support']
+          }
+        ]
+      };
     }
   }
 

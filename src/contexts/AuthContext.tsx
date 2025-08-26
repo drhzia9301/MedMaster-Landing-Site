@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import axios from 'axios';
-import { API_ENDPOINTS, createAuthConfig } from '../config/api';
+import { authService } from '../services/authService';
 
 interface User {
   id: number;
@@ -13,8 +12,8 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (username: string, password: string) => Promise<{ success: boolean; message?: string; token?: string; user?: User }>;
-  register: (username: string, email: string, password: string) => Promise<{ success: boolean; message?: string; token?: string; user?: User }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; message?: string; token?: string; user?: User }>;
+  register: (email: string, password: string) => Promise<{ success: boolean; message?: string; token?: string; user?: User }>;
   logout: () => void;
   checkAuthStatus: () => Promise<void>;
 }
@@ -41,16 +40,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const checkAuthStatus = async () => {
     try {
+      // For now, check if token exists in localStorage
       const token = localStorage.getItem('medMasterToken');
       if (!token) {
         setIsLoading(false);
         return;
       }
-
-      const response = await axios.get(API_ENDPOINTS.auth.profile, createAuthConfig(token));
-      setUser(response.data.user);
+      // TODO: Implement proper token validation with authService
+      // TODO: Implement proper token validation
+      const result = { success: false };
+      if (result.success) {
+        // This would be populated when proper auth is implemented
+        // setUser({
+        //   id: parseInt(result.user.id),
+        //   username: result.user.username,
+        //   email: result.user.email,
+        //   subscriptionType: result.user.subscription_status
+        // });
+      }
     } catch (error) {
-      // Token is invalid, remove it
+      // Clear any stored auth data
       localStorage.removeItem('medMasterToken');
       localStorage.removeItem('medMasterEmail');
       localStorage.removeItem('medMasterUsername');
@@ -59,44 +68,47 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const login = async (username: string, password: string) => {
+  const login = async (email: string, password: string) => {
     try {
-      const response = await axios.post(API_ENDPOINTS.auth.login, {
-        username,
-        password,
-      });
-
-      const { token, user: userData } = response.data;
+      const result = await authService.login({ email, password });
       
-      // Store authentication data
-      localStorage.setItem('medMasterToken', token);
-      localStorage.setItem('medMasterEmail', userData.email);
-      localStorage.setItem('medMasterUsername', userData.username);
-      
-      setUser(userData);
-      
-      return { success: true, token, user: userData };
+      if (result.success && result.user) {
+        const userData = {
+          id: parseInt(result.user.id),
+          username: result.user.username,
+          email: result.user.email,
+          subscriptionType: result.user.subscription_status
+        };
+        
+        // Store authentication data
+        localStorage.setItem('medMasterToken', result.token || '');
+        localStorage.setItem('medMasterEmail', userData.email);
+        localStorage.setItem('medMasterUsername', userData.username);
+        
+        setUser(userData);
+        
+        return { success: true, token: result.token, user: userData };
+      } else {
+        return { success: false, message: result.error || 'Login failed' };
+      }
     } catch (error: any) {
-      const message = error.response?.data?.message || 'Login failed';
-      return { success: false, message };
+      return { success: false, message: 'Login failed' };
     }
   };
 
-  const register = async (username: string, email: string, password: string) => {
+  const register = async (email: string, password: string) => {
     try {
-      await axios.post(API_ENDPOINTS.auth.register, {
-        username,
-        email,
-        password,
-      });
-
-      // After successful registration, log the user in
-      const loginResult = await login(username, password);
+      const result = await authService.register({ email, password });
       
-      return loginResult;
+      if (result.success) {
+        // After successful registration, log the user in
+        const loginResult = await login(email, password);
+        return loginResult;
+      } else {
+        return { success: false, message: result.error || 'Registration failed' };
+      }
     } catch (error: any) {
-      const message = error.response?.data?.message || 'Registration failed';
-      return { success: false, message };
+      return { success: false, message: 'Registration failed' };
     }
   };
 

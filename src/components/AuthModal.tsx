@@ -3,11 +3,12 @@ import { X, Eye, EyeOff, User, Mail, Lock, Loader } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
 import { signInWithGoogle } from '../config/firebase';
+import { authService } from '../services/authService';
 
 interface AuthModalProps {
   mode: 'login' | 'signup';
   onClose: () => void;
-  onAuthSuccess: (token: string, email: string, username: string) => void;
+  onAuthSuccess: (token: string, email: string, username: string, subscriptionType?: string, userId?: number) => void;
   onSwitchMode: (mode: 'login' | 'signup') => void;
 }
 
@@ -72,14 +73,14 @@ const AuthModal: React.FC<AuthModalProps> = ({ mode, onClose, onAuthSuccess, onS
       let result;
       
       if (mode === 'login') {
-        result = await login(formData.username, formData.password);
+        result = await login(formData.email, formData.password);
       } else {
-        result = await register(formData.username, formData.email, formData.password);
+        result = await register(formData.email, formData.password);
       }
 
       if (result.success && result.token && result.user) {
         toast.success(mode === 'login' ? 'Welcome back!' : 'Account created successfully!');
-        onAuthSuccess(result.token, result.user.email, result.user.username);
+        onAuthSuccess(result.token, result.user.email, result.user.username, 'demo', result.user.id);
       } else {
         toast.error(result.message || `${mode === 'login' ? 'Login' : 'Registration'} failed`);
       }
@@ -101,10 +102,33 @@ const AuthModal: React.FC<AuthModalProps> = ({ mode, onClose, onAuthSuccess, onS
       }
       
       if (result.user && result.idToken) {
-        // Here you would typically send the idToken to your backend
-        // For now, we'll simulate a successful authentication
-        toast.success('Google authentication successful!');
-        onAuthSuccess(result.idToken, result.user.email || '', result.user.displayName || '');
+        console.log('🔄 Sending Firebase data to backend:', {
+          email: result.user.email,
+          displayName: result.user.displayName,
+          uid: result.user.uid
+        });
+        
+        // Send the Firebase data to backend for registration/login
+        const firebaseData = {
+          idToken: result.idToken,
+          email: result.user.email,
+          displayName: result.user.displayName || result.user.email?.split('@')[0] || 'User'
+        };
+        
+        const authResult = await authService.registerFirebase(firebaseData);
+        
+        if (authResult.success && authResult.token && authResult.user) {
+          toast.success('Google authentication successful!');
+          onAuthSuccess(
+            authResult.token, 
+            authResult.user.email, 
+            authResult.user.username, 
+            authResult.user.subscription_status || 'demo', 
+            parseInt(authResult.user.id)
+          );
+        } else {
+          toast.error(authResult.error || 'Google authentication failed');
+        }
       }
     } catch (error: any) {
       console.error('Google auth error:', error);

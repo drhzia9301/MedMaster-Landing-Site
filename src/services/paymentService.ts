@@ -1,5 +1,4 @@
-import axios from 'axios';
-import { API_ENDPOINTS, createAuthConfig } from '../config/api';
+import { supabaseHelpers } from '../config/supabase';
 
 export interface PaymentPlan {
   id: number;
@@ -67,19 +66,11 @@ class PaymentService {
    */
   async getAvailablePaymentMethods(): Promise<PaymentMethodOption[]> {
     try {
-      const token = localStorage.getItem('medMasterToken');
-      if (!token) {
-        throw new Error('Authentication required');
-      }
-
-      const response = await axios.get(
-        API_ENDPOINTS.payment.methods,
-        createAuthConfig(token)
-      );
-
-      if (response.data.success) {
-        return response.data.methods || this.getDefaultPaymentMethods();
-      }
+      // TODO: Implement getAvailablePaymentMethods in supabaseHelpers
+      // const { data: methods, error } = await supabaseHelpers.getAvailablePaymentMethods();
+      
+      // For now, return default payment methods
+      console.warn('Using default payment methods - getAvailablePaymentMethods not implemented');
       return this.getDefaultPaymentMethods();
     } catch (error) {
       console.error('Error fetching payment methods:', error);
@@ -120,63 +111,73 @@ class PaymentService {
   }
 
   /**
-   * Create a unified payment session (supports both Stripe and PayFast)
+   * Create a payment session for the selected plan
    */
-  async createPaymentSession(planId: number, paymentMethod?: string): Promise<PaymentSession> {
+  async createPaymentSession(planId: number, userId: number, paymentMethod?: string): Promise<PaymentSession> {
     try {
-      const token = localStorage.getItem('medMasterToken');
-      if (!token) {
-        throw new Error('Authentication required');
-      }
-
-      const response = await axios.post(
-        API_ENDPOINTS.payment.createSession,
-        { planId, paymentMethod },
-        createAuthConfig(token)
-      );
-
-      if (response.data.success) {
+      if (!userId) {
         return {
-          success: true,
-          sessionId: response.data.sessionId,
-          url: response.data.paymentUrl || response.data.checkoutUrl,
-          paymentMethod: response.data.paymentMethod,
-          qrCode: response.data.qrCode,
-          bankDetails: response.data.bankDetails
+          success: false,
+          error: 'User ID required'
         };
-      } else {
-        return { success: false, error: response.data.error || 'Failed to create payment session' };
       }
+
+      // Get plan details
+      const { data: plans, error: planError } = await supabaseHelpers.getSubscriptionPlans();
+      const plan = plans?.find(p => p.id === planId);
+      
+      if (planError || !plan) {
+        return {
+          success: false,
+          error: 'Invalid subscription plan'
+        };
+      }
+
+      // Generate session ID
+      const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // For demo purposes, return a mock payment session
+      // In production, this would integrate with actual payment processors
+      return {
+        success: true,
+        sessionId,
+        url: `/payment/checkout?session=${sessionId}&plan=${planId}`,
+        paymentMethod: paymentMethod as any || 'paddle'
+      };
     } catch (error: any) {
       console.error('Error creating payment session:', error);
-      return { success: false, error: error.response?.data?.message || error.message || 'Failed to create payment session' };
+      return {
+        success: false,
+        error: 'Failed to create payment session'
+      };
     }
   }
 
   /**
-   * Create a Paddle checkout session (legacy method)
+   * Create a checkout session using Supabase
    */
-  async createCheckoutSession(planId: number): Promise<{ success: boolean; url?: string; error?: string }> {
+  async createCheckoutSession(_planId: number): Promise<{ success: boolean; url?: string; error?: string }> {
     try {
+      // Get user ID from token (assuming it's stored in localStorage)
       const token = localStorage.getItem('medMasterToken');
       if (!token) {
-        throw new Error('Authentication required');
+        return { success: false, error: 'Authentication required' };
       }
 
-      const response = await axios.post(
-        API_ENDPOINTS.payment.createCheckout,
-        { planId },
-        createAuthConfig(token)
-      );
-
-      if (response.data.success && response.data.checkoutUrl) {
-        return { success: true, url: response.data.checkoutUrl };
-      } else {
-        return { success: false, error: response.data.error || 'Failed to create checkout session' };
-      }
+      // For now, we'll need to pass userId from the calling component
+      // This is a temporary solution until proper auth integration
+      return { success: false, error: 'User ID required for payment session' };
+      
+      // TODO: Implement proper checkout session creation
+      // const session = await supabaseHelpers.createCheckoutSession(userId, planId);
+      // if (session.success && session.url) {
+      //   return { success: true, url: session.url };
+      // } else {
+      //   return { success: false, error: session.error || 'Failed to create checkout session' };
+      // }
     } catch (error: any) {
       console.error('Error creating checkout session:', error);
-      return { success: false, error: error.response?.data?.message || error.message || 'Failed to create checkout session' };
+      return { success: false, error: error.message || 'Failed to create checkout session' };
     }
   }
 
@@ -206,11 +207,10 @@ class PaymentService {
    */
   async handlePaymentSuccess(sessionId: string): Promise<boolean> {
     try {
-      const response = await axios.get(
-        `${API_ENDPOINTS.payment.success}?session_id=${sessionId}`
-      );
-
-      return response.data.success;
+      // TODO: Implement handlePaymentSuccess in supabaseHelpers
+      // const { data, error } = await supabaseHelpers.handlePaymentSuccess(sessionId);
+      console.warn('handlePaymentSuccess not implemented, sessionId:', sessionId);
+      return false;
     } catch (error) {
       console.error('Error handling payment success:', error);
       return false;
@@ -218,49 +218,78 @@ class PaymentService {
   }
 
   /**
-   * Verify payment status
+   * Verify payment status and update subscription
    */
-  async verifyPayment(sessionId: string): Promise<PaymentVerification> {
+  async verifyPayment(sessionId: string, userId: number): Promise<PaymentVerification> {
     try {
-      const token = localStorage.getItem('medMasterToken');
-      if (!token) {
-        throw new Error('Authentication required');
+      if (!userId) {
+        return {
+          success: false,
+          error: 'User ID required'
+        };
       }
 
-      const response = await axios.post(
-        API_ENDPOINTS.payment.verify,
-        { sessionId },
-        createAuthConfig(token)
-      );
+      // Get transaction by session ID
+      const { data: transaction, error: transactionError } = await supabaseHelpers.getPaymentTransactionBySession(sessionId);
+      
+      if (transactionError || !transaction) {
+        return {
+          success: false,
+          error: 'Transaction not found'
+        };
+      }
 
-      return response.data;
+      // Get user subscription
+      const { data: subscription, error: _subscriptionError } = await supabaseHelpers.getUserSubscription(userId);
+      
+      const paymentStatus = transaction.status;
+      const subscriptionActive = subscription?.status === 'active';
+
+      return {
+        success: true,
+        data: {
+          transaction,
+          subscription,
+          paymentStatus,
+          subscriptionActive
+        }
+      };
     } catch (error: any) {
       console.error('Error verifying payment:', error);
       return {
         success: false,
-        error: error.response?.data?.error || error.message || 'Failed to verify payment'
+        error: 'Payment verification failed'
       };
     }
   }
 
   /**
-   * Get user's payment history
+   * Get payment history for the current user
    */
-  async getPaymentHistory(): Promise<PaymentHistory> {
+  async getPaymentHistory(userId: number): Promise<PaymentHistory> {
     try {
-      const token = localStorage.getItem('medMasterToken');
-      if (!token) {
-        throw new Error('Authentication required');
+      if (!userId) {
+        return {
+          success: false,
+          data: []
+        };
       }
 
-      const response = await axios.get(
-        API_ENDPOINTS.payment.history,
-        createAuthConfig(token)
-      );
+      const { data: transactions, error } = await supabaseHelpers.getUserPaymentHistory(userId);
+      
+      if (error) {
+        return {
+          success: false,
+          data: []
+        };
+      }
 
-      return response.data;
+      return {
+        success: true,
+        data: transactions || []
+      };
     } catch (error: any) {
-      console.error('Error getting payment history:', error);
+      console.error('Error fetching payment history:', error);
       return {
         success: false,
         data: []
@@ -273,18 +302,14 @@ class PaymentService {
    */
   async getTransaction(sessionId: string): Promise<PaymentTransaction | null> {
     try {
-      const token = localStorage.getItem('medMasterToken');
-      if (!token) {
-        throw new Error('Authentication required');
+      const { data: transaction, error } = await supabaseHelpers.getPaymentTransactionBySession(sessionId);
+      
+      if (error || !transaction) {
+        return null;
       }
 
-      const response = await axios.get(
-        API_ENDPOINTS.payment.transaction(sessionId),
-        createAuthConfig(token)
-      );
-
-      return response.data.success ? response.data.data : null;
-    } catch (error) {
+      return transaction;
+    } catch (error: any) {
       console.error('Error getting transaction:', error);
       return null;
     }

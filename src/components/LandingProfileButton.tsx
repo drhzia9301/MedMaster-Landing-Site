@@ -7,7 +7,7 @@ interface LandingProfileButtonProps {
 }
 
 const LandingProfileButton: React.FC<LandingProfileButtonProps> = ({ onGoToApp }) => {
-  const { user, logout, refreshSubscriptionStatus } = useLandingAuth();
+  const { user, logout } = useLandingAuth();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -23,10 +23,8 @@ const LandingProfileButton: React.FC<LandingProfileButtonProps> = ({ onGoToApp }
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Refresh subscription status when component mounts
-  useEffect(() => {
-    refreshSubscriptionStatus();
-  }, [refreshSubscriptionStatus]);
+  // Remove the automatic refresh on mount to prevent freezing
+  // Subscription status is already fetched during login
 
   if (!user) return null;
 

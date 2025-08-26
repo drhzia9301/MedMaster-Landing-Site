@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { signInWithGoogle, handleRedirectResult } from '../config/firebase';
 
 interface GoogleSignInProps {
-  onSuccess: (credential: string) => void;
+  onSuccess: (userData: any) => void;
   onError?: (error: string) => void;
   disabled?: boolean;
   text?: string;
@@ -21,9 +21,15 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({
     const checkRedirectResult = async () => {
       try {
         const result = await handleRedirectResult();
-        if (result && result.idToken) {
+        if (result && result.idToken && result.user) {
           console.log('Redirect result found:', result);
-          onSuccess(result.idToken);
+          onSuccess({
+            uid: result.user.uid,
+            email: result.user.email,
+            displayName: result.user.displayName,
+            photoURL: result.user.photoURL,
+            idToken: result.idToken
+          });
         }
       } catch (error: any) {
         console.error('Error handling redirect result:', error);
@@ -32,7 +38,7 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({
     };
 
     checkRedirectResult();
-  }, [onSuccess, onError]);
+  }, []); // Empty dependency array - only run once on mount
 
   const handleGoogleSignIn = async () => {
     if (disabled || isLoading) return;
@@ -49,9 +55,15 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({
         return;
       }
       
-      // Pass the Firebase ID token to the parent component
-      if (result.idToken) {
-        onSuccess(result.idToken);
+      // Pass the complete user data to the parent component
+      if (result.idToken && result.user) {
+        onSuccess({
+          uid: result.user.uid,
+          email: result.user.email,
+          displayName: result.user.displayName,
+          photoURL: result.user.photoURL,
+          idToken: result.idToken
+        });
       } else {
         onError?.('Failed to get authentication token');
       }

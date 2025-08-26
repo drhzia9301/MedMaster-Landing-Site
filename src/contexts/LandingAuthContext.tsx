@@ -3,6 +3,7 @@ import { subscriptionService } from '../services/subscriptionService';
 import { crossOriginAuth, AuthData } from '../utils/crossOriginAuth';
 
 interface User {
+  id: number;
   username: string;
   email: string;
   subscriptionType: string;
@@ -15,7 +16,7 @@ interface User {
 interface LandingAuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  login: (token: string, email: string, username: string, subscriptionType?: string) => void;
+  login: (token: string, email: string, username: string, userId: number, subscriptionType?: string) => void;
   logout: () => void;
   refreshSubscriptionStatus: () => Promise<void>;
 }
@@ -30,15 +31,16 @@ export const LandingAuthProvider: React.FC<LandingAuthProviderProps> = ({ childr
   const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  const login = (token: string, email: string, username: string, subscriptionType: string = 'demo') => {
-    console.log('🔐 LandingAuthContext.login called with:', { token: token.substring(0, 20) + '...', email, username, subscriptionType });
+  const login = (token: string, email: string, username: string, userId: number, subscriptionType: string = 'demo') => {
+    console.log('🔐 LandingAuthContext.login called with:', { token: token.substring(0, 20) + '...', email, username, userId, subscriptionType });
     
     const userData: User = {
+      id: userId,
       username,
       email,
       subscriptionType
     };
-    const authData: AuthData = { token, email, username, subscriptionType };
+    const authData: AuthData = { token, email, username, userId, subscriptionType };
     
     // Use cross-origin auth utility for better token management
     crossOriginAuth.storeAuthData(authData);
@@ -68,7 +70,13 @@ export const LandingAuthProvider: React.FC<LandingAuthProviderProps> = ({ childr
       const originalToken = localStorage.getItem('medMasterToken');
       localStorage.setItem('medMasterToken', authData.token);
       
-      const subscriptionStatus = await subscriptionService.getSubscriptionStatus();
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Subscription status request timeout')), 5000)
+      );
+      
+      const subscriptionPromise = subscriptionService.getSubscriptionStatus();
+      const subscriptionStatus = await Promise.race([subscriptionPromise, timeoutPromise]) as any;
       
       // Restore original token
       if (originalToken) {
@@ -99,6 +107,11 @@ export const LandingAuthProvider: React.FC<LandingAuthProviderProps> = ({ childr
     } catch (error) {
       console.error('❌ Error refreshing subscription status:', error);
       // Don't fail the whole auth flow if subscription refresh fails
+      // Restore original token in case of error
+      const originalToken = localStorage.getItem('medMasterToken');
+      if (originalToken) {
+        localStorage.setItem('medMasterToken', originalToken);
+      }
     }
   };
 
@@ -141,6 +154,7 @@ export const LandingAuthProvider: React.FC<LandingAuthProviderProps> = ({ childr
             token,
             email,
             username,
+            userId: 0, // Default, will be updated if available
             subscriptionType: 'demo' // Default, will be updated below
           };
           console.log('✅ Created authData from main app tokens');
@@ -151,6 +165,7 @@ export const LandingAuthProvider: React.FC<LandingAuthProviderProps> = ({ childr
         console.log('🎯 Auth data found, setting user state...');
         try {
           const parsedUser = {
+            id: authData.userId || 0,
             username: authData.username,
             email: authData.email,
             subscriptionType: authData.subscriptionType || 'demo'
@@ -180,6 +195,7 @@ export const LandingAuthProvider: React.FC<LandingAuthProviderProps> = ({ childr
             // Update user with latest subscription status
             const updatedUser = {
               ...parsedUser,
+              id: authData.userId || 0,
               subscriptionType: subscriptionStatus.subscription_type,
               subscriptionStatus: subscriptionStatus.status,
               planName: subscriptionStatus.plan_name,

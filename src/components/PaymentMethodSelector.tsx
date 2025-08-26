@@ -8,6 +8,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { paymentService, PaymentMethodOption, PaymentSession } from '../services/paymentService';
+import { useLandingAuth } from '../contexts/LandingAuthContext';
 import LoadingSpinner from './LoadingSpinner';
 
 interface PaymentMethodSelectorProps {
@@ -25,6 +26,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
   onPaymentInitiated,
   onError
 }) => {
+  const { user } = useLandingAuth();
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodOption[]>([]);
   const [selectedMethod, setSelectedMethod] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -64,7 +66,12 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
 
     try {
       setProcessing(true);
-      const session = await paymentService.createPaymentSession(planId, selectedMethod);
+      
+      if (!user?.id) {
+        throw new Error('User authentication required');
+      }
+      
+      const session = await paymentService.createPaymentSession(planId, user.id, selectedMethod);
       
       if (session.success) {
         setPaymentSession(session);

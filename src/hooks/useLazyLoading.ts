@@ -29,7 +29,7 @@ export const useIntersectionObserver = (options?: IntersectionObserverInit) => {
     return () => {
       observer.unobserve(target);
     };
-  }, [hasIntersected, options]);
+  }, [hasIntersected]);
 
   return { targetRef, isIntersecting, hasIntersected };
 };

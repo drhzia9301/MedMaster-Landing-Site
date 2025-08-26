@@ -4,6 +4,9 @@ import App from './App.tsx';
 import './index.css';
 import { Toaster } from 'sonner';
 
+// Initialize Trusted Types policy early to prevent TrustedHTML errors
+import './utils/trustedTypes';
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <App />

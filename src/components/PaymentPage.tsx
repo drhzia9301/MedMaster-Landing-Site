@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useLandingAuth } from '../contexts/LandingAuthContext';
 import { toast } from 'sonner';
-import { API_ENDPOINTS } from '../config/api';
+import { supabaseHelpers } from '../config/supabase';
 
 interface PaymentPageProps {
   onBackToLanding: () => void;
@@ -48,27 +48,23 @@ const PaymentPage: React.FC<PaymentPageProps> = ({ onBackToLanding }) => {
     try {
       console.log('🔄 Fetching plan details for:', planName);
       
-      // First try to fetch from API
+      // First try to fetch from Supabase
       try {
-        const response = await fetch(API_ENDPOINTS.subscriptions.plans);
-        console.log('📡 API response status:', response.status);
-        
-        if (response.ok) {
-          const data = await response.json();
-          console.log('📊 API data received:', data);
-          const plans = data.plans || [];
-          const selectedPlan = plans.find((p: Plan) => 
+        const plansResult = await supabaseHelpers.getSubscriptionPlans();
+        console.log('📊 Supabase data received:', plansResult);
+        if (plansResult.data) {
+          const selectedPlan = plansResult.data.find((p: Plan) => 
             p.name.toLowerCase().includes(planName?.toLowerCase() || '')
           );
-          
+        
           if (selectedPlan) {
-            console.log('✅ Plan found from API:', selectedPlan);
+            console.log('✅ Plan found from Supabase:', selectedPlan);
             setPlan(selectedPlan);
             return;
           }
         }
-      } catch (apiError) {
-        console.log('⚠️ API fetch failed, using fallback data:', apiError);
+      } catch (supabaseError) {
+        console.log('⚠️ Supabase fetch failed, using fallback data:', supabaseError);
       }
       
       // Fallback to hardcoded plan data
@@ -133,38 +129,16 @@ const PaymentPage: React.FC<PaymentPageProps> = ({ onBackToLanding }) => {
     setPaymentLoading(true);
     
     try {
-      const token = localStorage.getItem('medMasterToken');
-      if (!token) {
-        throw new Error('No authentication token found');
-      }
-
-      const response = await fetch(API_ENDPOINTS.payment.createCheckout, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          planId: plan.id,
-          planName: plan.name,
-          amount: plan.price,
-          currency: plan.currency,
-          paymentMethod: paymentMethod,
-          userEmail: user.email,
-          userName: user.username
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Payment initiation failed');
-      }
-
-      const result = await response.json();
+      // TODO: Implement createCheckoutSession in supabaseHelpers
+      // For now, we'll simulate a failed checkout session creation
+      const result = {
+        success: false,
+        error: 'Payment processing not yet implemented'
+      };
       
-      if (result.success && result.url) {
-        // Redirect to payment provider
-        window.location.href = result.url;
+      if (result.success) {
+        // TODO: Redirect to payment provider when implemented
+        // window.location.href = result.url;
       } else {
         throw new Error(result.error || 'Failed to create payment session');
       }

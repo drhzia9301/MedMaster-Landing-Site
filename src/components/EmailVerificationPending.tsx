@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { resendVerificationEmail } from '../config/firebase';
+import { authService } from '../services/authService';
 import { toast } from 'sonner';
 import { Mail, ArrowLeft, RefreshCw } from 'lucide-react';
 
@@ -29,21 +29,18 @@ const EmailVerificationPending: React.FC<EmailVerificationPendingProps> = ({
     setIsResending(true);
     
     try {
-      await resendVerificationEmail();
+      const result = await authService.resendVerification();
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to resend verification email');
+      }
+      
       setLastResendTime(now);
-      toast.success('Verification email sent! Please check your inbox.');
+      toast.success(result.message || 'Verification email sent! Please check your inbox.');
       onResendSuccess?.();
     } catch (error: any) {
       console.error('Error resending verification email:', error);
-      
-      let errorMessage = 'Failed to resend verification email.';
-      if (error.code === 'auth/too-many-requests') {
-        errorMessage = 'Too many requests. Please try again later.';
-      } else if (error.code === 'auth/user-not-found') {
-        errorMessage = 'User not found. Please sign up again.';
-      }
-      
-      toast.error(errorMessage);
+      toast.error(error.message || 'Failed to resend verification email.');
     } finally {
       setIsResending(false);
     }

@@ -1,21 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import BugIcon from './icons/BugIcon';
-import { API_ENDPOINTS } from '../config/api';
+import { authService } from '../services/authService';
 import { subscriptionService } from '../services/subscriptionService';
 import { toast } from 'sonner';
 import GoogleSignIn from './GoogleSignIn';
 import { handleRedirectResult } from '../config/firebase';
 
 interface AuthPageProps {
-  onAuthSuccess: (token: string, email: string, username: string, subscriptionType?: string) => void;
+  onAuthSuccess: (token: string, email: string, username: string, subscriptionType?: string, userId?: number) => void;
   onBackToLanding?: () => void;
   initialMode?: 'login' | 'signup';
 }
 
 const AuthPage: React.FC<AuthPageProps> = ({ onAuthSuccess, onBackToLanding, initialMode = 'login' }) => {
   const [isLogin, setIsLogin] = useState(initialMode === 'login');
-  const [username, setUsername] = useState('');
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -39,35 +38,33 @@ const AuthPage: React.FC<AuthPageProps> = ({ onAuthSuccess, onBackToLanding, ini
     checkRedirectResult();
   }, []);
 
-  const handleGoogleSignIn = async (credential: string) => {
+  const handleGoogleSignIn = async (_credential: string) => {
     setError(null);
     setLoading(true);
 
     try {
-      // Send the Google credential to your backend
-      const response = await axios.post(API_ENDPOINTS.auth.google, { credential });
-      const { token, email, username } = response.data;
-
-      // Store token temporarily to fetch subscription status
-      localStorage.setItem('medMasterToken', token);
+      // For Google sign-in, we need to use Firebase first, then register with authService
+      // This is a placeholder - Google sign-in needs proper Firebase integration
+      throw new Error('Google sign-in not implemented yet');
       
-      try {
-        const subscriptionStatus = await subscriptionService.getSubscriptionStatus();
-        
-        onAuthSuccess(token, email, username, subscriptionStatus.subscription_type);
-        
-        // Show welcome message
-        toast.success('Welcome! Logged in successfully.');
-      } catch (subscriptionError) {
-        console.warn('Could not fetch subscription status:', subscriptionError);
-        // Continue with login even if subscription fetch fails
-        onAuthSuccess(token, email, username, 'demo');
-        toast.success('Welcome! Logged in successfully.');
-      }
+      // TODO: Implement proper Google sign-in flow
+      // const result = await authService.googleSignIn(credential);
+      // if (result.success && result.user && result.token) {
+      //   localStorage.setItem('medMasterToken', result.token);
+      //   try {
+      //     const subscriptionStatus = await subscriptionService.getSubscriptionStatus(result.user.id);
+      //     onAuthSuccess(result.token, result.user.email, result.user.username, subscriptionStatus.subscription_type);
+      //     toast.success('Welcome! Logged in with Google successfully.');
+      //   } catch (subscriptionError) {
+      //     console.warn('Could not fetch subscription status:', subscriptionError);
+      //     onAuthSuccess(result.token, result.user.email, result.user.username, 'demo');
+      //     toast.success('Welcome! Logged in successfully.');
+      //   }
+      // } else {
+      //   throw new Error(result.error || 'Google authentication failed');
+      // }
     } catch (err: any) {
-      const errorMessage = axios.isAxiosError(err) && err.response
-        ? err.response.data.message || 'Google sign-in failed'
-        : 'An error occurred during Google sign-in';
+      const errorMessage = err.message || 'An error occurred during Google sign-in';
       
       setError(errorMessage);
       toast.error(errorMessage);
@@ -85,50 +82,37 @@ const AuthPage: React.FC<AuthPageProps> = ({ onAuthSuccess, onBackToLanding, ini
     setError(null);
     setLoading(true);
 
-    const url = isLogin ? API_ENDPOINTS.auth.login : API_ENDPOINTS.auth.register;
-    const payload = isLogin ? { username, password } : { username, email, password };
-
     try {
-      let authToken: string;
-      let userEmail: string;
-      let userName: string;
-
+      let authResult: any;
+      
       if (isLogin) {
-        const response = await axios.post(url, payload);
-        authToken = response.data.token;
-        userEmail = response.data.email;
-        userName = response.data.username;
+        authResult = await authService.login({ email, password });
       } else {
-        await axios.post(url, payload);
-        // Automatically log in after successful registration
-        const loginResponse = await axios.post(API_ENDPOINTS.auth.login, { username, password });
-        authToken = loginResponse.data.token;
-        userEmail = email;
-        userName = username;
+        authResult = await authService.register({ email, password });
+      }
+      
+      if (!authResult.success || !authResult.user || !authResult.token) {
+        throw new Error(authResult.error || 'Authentication failed');
       }
 
       // Store token temporarily to fetch subscription status
-      localStorage.setItem('medMasterToken', authToken);
+      localStorage.setItem('medMasterToken', authResult.token);
       
       // Fetch subscription status after successful authentication
       try {
-        const subscriptionStatus = await subscriptionService.getSubscriptionStatus();
-        onAuthSuccess(authToken, userEmail, userName, subscriptionStatus.subscription_type);
+        const subscriptionStatus = await subscriptionService.getSubscriptionStatus(authResult.user.id);
+        onAuthSuccess(authResult.token, authResult.user.email, authResult.user.username, subscriptionStatus.subscription_type, authResult.user.id);
         
         // Show welcome message
-        toast.success('Welcome! Logged in successfully.');
+        toast.success(`Welcome ${authResult.user.username}! ${isLogin ? 'Logged in' : 'Account created'} successfully.`);
       } catch (subscriptionError) {
-        console.warn('Could not fetch subscription status:', subscriptionError);
-        // Continue with login even if subscription fetch fails
-        onAuthSuccess(authToken, userEmail, userName, 'demo');
-        toast.success('Welcome! Logged in successfully.');
+          console.warn('Could not fetch subscription status:', subscriptionError);
+          // Continue with login even if subscription fetch fails
+          onAuthSuccess(authResult.token, authResult.user.email, authResult.user.username, 'demo', authResult.user.id);
+          toast.success('Welcome! Logged in successfully.');
       }
     } catch (err: any) {
-      if (axios.isAxiosError(err) && err.response) {
-        setError(err.response.data.message || 'An error occurred.');
-      } else {
-        setError('An unknown error occurred. Is the server running?');
-      }
+      setError(err.message || 'Authentication failed');
     } finally {
       setLoading(false);
     }
@@ -149,33 +133,18 @@ const AuthPage: React.FC<AuthPageProps> = ({ onAuthSuccess, onBackToLanding, ini
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-sm font-bold text-gray-300 mb-2" htmlFor="username">
-              Username
+            <label className="block text-sm font-bold text-gray-300 mb-2" htmlFor="email">
+              Email
             </label>
             <input
-              id="username"
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               required
               className="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
             />
           </div>
-          {!isLogin && (
-            <div>
-              <label className="block text-sm font-bold text-gray-300 mb-2" htmlFor="email">
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-              />
-            </div>
-          )}
           <div>
             <label className="block text-sm font-bold text-gray-300 mb-2" htmlFor="password">
               Password

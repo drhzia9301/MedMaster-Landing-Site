@@ -14,15 +14,50 @@ import {
 } from 'firebase/auth';
 import { FirebaseApp } from 'firebase/app';
 
+// Debug environment variables
+console.log('🔍 Environment Debug:', {
+  NODE_ENV: import.meta.env.MODE,
+  API_KEY: import.meta.env.VITE_FIREBASE_API_KEY ? 'LOADED' : 'MISSING',
+  AUTH_DOMAIN: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'MISSING',
+  PROJECT_ID: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'MISSING',
+  STORAGE_BUCKET: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'MISSING',
+  MESSAGING_SENDER_ID: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || 'MISSING',
+  APP_ID: import.meta.env.VITE_FIREBASE_APP_ID || 'MISSING',
+  MEASUREMENT_ID: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || 'MISSING'
+});
+
+// Production Firebase config fallback
+const productionConfig = {
+  apiKey: 'AIzaSyCsy00m3pl76bitsNcffnGpm9DObgKELcM',
+  authDomain: 'medmaster-auth.firebaseapp.com',
+  projectId: 'medmaster-auth',
+  storageBucket: 'medmaster-auth.firebasestorage.app',
+  messagingSenderId: '1073454322288',
+  appId: '1:1073454322288:web:2dd42bd0d731d6c2bb5ab5',
+  measurementId: 'G-6V494YYG8Z'
+};
+
 // Your Firebase config (get this from Firebase Console)
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || ''
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || productionConfig.apiKey,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || productionConfig.authDomain,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || productionConfig.projectId,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || productionConfig.storageBucket,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || productionConfig.messagingSenderId,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || productionConfig.appId,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || productionConfig.measurementId
 };
+
+// Log the current domain for debugging
+console.log('🌐 Current domain:', window.location.hostname);
+console.log('🔧 Auth domain configured:', firebaseConfig.authDomain);
+
+console.log('🔧 Final Firebase config:', {
+  apiKey: firebaseConfig.apiKey ? '***' : 'missing',
+  authDomain: firebaseConfig.authDomain,
+  projectId: firebaseConfig.projectId,
+  source: import.meta.env.VITE_FIREBASE_API_KEY ? 'environment' : 'fallback'
+});
 
 // Initialize Firebase only if config is available
 let app: FirebaseApp | undefined;
@@ -55,8 +90,13 @@ if (firebaseConfig.apiKey) {
   console.log('Missing config:', {
     apiKey: !firebaseConfig.apiKey,
     authDomain: !firebaseConfig.authDomain,
-    projectId: !firebaseConfig.projectId
+    projectId: !firebaseConfig.projectId,
+    storageBucket: !firebaseConfig.storageBucket,
+    messagingSenderId: !firebaseConfig.messagingSenderId,
+    appId: !firebaseConfig.appId
   });
+  console.log('Current environment mode:', import.meta.env.MODE);
+  console.log('All environment variables:', import.meta.env);
 }
 
 // Google Sign-In function - use popup with proper error handling
@@ -170,8 +210,12 @@ export const signUpWithEmailAndPassword = async (email: string, password: string
     const result = await createUserWithEmailAndPassword(auth, email, password);
     const user = result.user;
     
-    // Send email verification
-    await sendEmailVerification(user);
+    // Send email verification with custom action URL and continue URL
+    const actionCodeSettings = {
+      url: `https://medmaster.site/auth/action?continueUrl=${encodeURIComponent('https://medmaster.site/login')}`,
+      handleCodeInApp: true
+    };
+    await sendEmailVerification(user, actionCodeSettings);
     
     // Get the ID token
     const idToken = await user.getIdToken();
@@ -236,7 +280,12 @@ export const resendVerificationEmail = async () => {
   }
   
   try {
-    await sendEmailVerification(auth.currentUser);
+    // Send email verification with custom action URL and continue URL
+    const actionCodeSettings = {
+      url: `https://medmaster.site/auth/action?continueUrl=${encodeURIComponent('https://medmaster.site/login')}`,
+      handleCodeInApp: true
+    };
+    await sendEmailVerification(auth.currentUser, actionCodeSettings);
   } catch (error) {
     console.error('Error resending verification email:', error);
     throw error;

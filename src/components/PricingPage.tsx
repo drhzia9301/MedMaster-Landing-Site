@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLandingAuth } from '../contexts/LandingAuthContext';
-import { API_ENDPOINTS } from '../config/api';
+import { supabaseHelpers } from '../config/supabase';
 import BrainIcon from './icons/BrainIcon';
 import FireIcon from './icons/FireIcon';
 import CrownIcon from './icons/CrownIcon';
@@ -98,20 +98,16 @@ function PricingPage({ onShowLandingLogin, onBackToLanding }: PricingPageProps) 
       if (isActivePlan(planType) && planType !== 'demo') {
         const confirmUnsubscribe = window.confirm('Do you want to unsubscribe from your current plan?');
         if (confirmUnsubscribe) {
-          const response = await fetch(API_ENDPOINTS.subscription.cancel, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
-          });
+          if (!user?.id) {
+            throw new Error('User not found');
+          }
+          const result = await supabaseHelpers.cancelUserSubscription(user.id);
           
-          if (response.ok) {
+          if (result.success) {
             await refreshSubscriptionStatus();
             alert('Unsubscribed successfully! You now have demo access.');
           } else {
-            const error = await response.json();
-            throw new Error(error.message || 'Failed to unsubscribe');
+            throw new Error(result.error || 'Failed to unsubscribe');
           }
         }
         return;
@@ -131,40 +127,34 @@ function PricingPage({ onShowLandingLogin, onBackToLanding }: PricingPageProps) 
         if (planType === 'demo' && currentPlan !== 'demo') {
           const confirmDowngrade = window.confirm('Are you sure you want to downgrade to Demo? You will lose access to premium features.');
           if (confirmDowngrade) {
-            const response = await fetch(API_ENDPOINTS.subscription.cancel, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-              }
-            });
+            if (!user?.id) {
+              throw new Error('User not found');
+            }
+            const result = await supabaseHelpers.cancelUserSubscription(user.id);
             
-            if (response.ok) {
+            if (result.success) {
               await refreshSubscriptionStatus();
               alert('Successfully downgraded to Demo plan!');
             } else {
-              const error = await response.json();
-              throw new Error(error.message || 'Failed to downgrade');
+              throw new Error(result.error || 'Failed to downgrade');
             }
           }
         } else if (planType === 'starter' && (currentPlan === 'premium' || currentPlan === 'popular')) {
           const confirmDowngrade = window.confirm('Are you sure you want to downgrade to Starter? You will lose some premium features.');
           if (confirmDowngrade) {
-            const response = await fetch(API_ENDPOINTS.subscription.downgrade, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({ planId: planIdMap.starter })
+            if (!user?.id) {
+              throw new Error('User not found');
+            }
+            const result = await supabaseHelpers.updateUserSubscriptionByUserId(user.id, {
+              plan_id: planIdMap.starter,
+              subscription_type: 'starter'
             });
             
-            if (response.ok) {
+            if (result.success) {
               await refreshSubscriptionStatus();
               alert('Successfully downgraded to Starter plan!');
             } else {
-              const error = await response.json();
-              throw new Error(error.message || 'Failed to downgrade');
+              throw new Error(result.error || 'Failed to downgrade');
             }
           }
         } else if (planType === 'popular' && currentPlan !== 'premium' && currentPlan !== 'popular') {
@@ -176,21 +166,19 @@ function PricingPage({ onShowLandingLogin, onBackToLanding }: PricingPageProps) 
             console.log('✅ Navigation command executed');
           } else {
             // Upgrade from starter to premium
-            const response = await fetch(API_ENDPOINTS.subscription.upgrade, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({ planId: planIdMap.popular })
+            if (!user?.id) {
+              throw new Error('User not found');
+            }
+            const result = await supabaseHelpers.updateUserSubscriptionByUserId(user.id, {
+              plan_id: planIdMap.popular,
+              subscription_type: 'premium'
             });
             
-            if (response.ok) {
+            if (result.success) {
               await refreshSubscriptionStatus();
               alert('Successfully upgraded to Premium plan!');
             } else {
-              const error = await response.json();
-              throw new Error(error.message || 'Failed to upgrade');
+              throw new Error(result.error || 'Failed to upgrade');
             }
           }
         } else if (planType === 'starter' && currentPlan === 'demo') {

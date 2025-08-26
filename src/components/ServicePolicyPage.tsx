@@ -208,7 +208,7 @@ const ServicePolicyPage: React.FC<ServicePolicyPageProps> = ({ onBackToLanding }
                 For service delivery questions or technical support:
               </p>
               <div className="bg-gray-800/50 rounded-lg p-4 space-y-2">
-                <p><strong>Email:</strong> contact@medmaster.com</p>
+                <p><strong>Email:</strong> contact@medmaster.site</p>
 
                 <p><strong>Address:</strong> Peshawar, Khyber Pakhtunkhwa, 25000, Pakistan</p>
               </div>

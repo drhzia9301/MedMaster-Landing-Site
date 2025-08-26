@@ -3,12 +3,29 @@
  * Connects to the shared MedMaster backend
  */
 
-// Get API base URL from environment or fallback to local development server
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002'; // Local development server
+// Get API base URL from environment
+const VITE_API_URL = import.meta.env.VITE_API_URL;
 
-// API endpoints
+// Use environment variable if set, otherwise fallback to localhost
+let resolvedApiUrl = VITE_API_URL || 'http://localhost:3003';
+
+// In production, the API URL must be set
+if (import.meta.env.PROD && !VITE_API_URL) {
+  throw new Error('VITE_API_URL is not defined. Please set it in your Vercel environment variables.');
+}
+
+export const API_BASE_URL = resolvedApiUrl;
+
+// Debug API configuration
+console.log('🌐 API Configuration:', {
+  VITE_API_URL: import.meta.env.VITE_API_URL,
+  API_BASE_URL,
+  environment: import.meta.env.MODE
+});
+
+// API endpoints - EXACTLY matching main app
 export const API_ENDPOINTS = {
-  // Authentication
+  // Authentication endpoints
   auth: {
     login: `${API_BASE_URL}/api/auth/login`,
     register: `${API_BASE_URL}/api/auth/register`,
@@ -16,23 +33,23 @@ export const API_ENDPOINTS = {
     google: `${API_BASE_URL}/api/auth/google`,
     profile: `${API_BASE_URL}/api/auth/profile`,
   },
-  
-  // Subscription
+
+  // Subscription endpoints
   subscriptions: {
     status: `${API_BASE_URL}/api/subscriptions/status`,
     plans: `${API_BASE_URL}/api/subscriptions/plans`,
     checkAccess: `${API_BASE_URL}/api/subscriptions/check-access`,
   },
-  
-  // Subscription Management
+
+  // Subscription management endpoints
   subscription: {
     cancel: `${API_BASE_URL}/api/subscriptions/cancel`,
     upgrade: `${API_BASE_URL}/api/subscriptions/upgrade`,
     downgrade: `${API_BASE_URL}/api/subscriptions/downgrade`,
     status: `${API_BASE_URL}/api/subscriptions/status`,
   },
-  
-  // Payment
+
+  // Payment endpoints
   payment: {
     createCheckout: `${API_BASE_URL}/api/payment/create-checkout-session`,
     createSession: `${API_BASE_URL}/api/payment/create-session`,
@@ -62,6 +79,5 @@ export const CORS_CONFIG = {
   credentials: 'include',
   headers: {
     'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
   },
 };

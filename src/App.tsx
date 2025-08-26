@@ -12,6 +12,7 @@ import ServicePolicyPage from './components/ServicePolicyPage';
 import PaymentPage from './components/PaymentPage';
 import LandingLoginPage from './components/LandingLoginPage';
 import LandingSignupPage from './components/LandingSignupPage';
+import FirebaseActionHandler from './components/FirebaseActionHandler';
 import { AuthProvider } from './contexts/AuthContext';
 import { LandingAuthProvider, useLandingAuth } from './contexts/LandingAuthContext';
 
@@ -31,13 +32,16 @@ function AppContentWithAuth() {
     setShowAuthModal(true);
   };
 
-  const handleAuthSuccess = (token: string, email: string, username: string, subscriptionType?: string) => {
-    console.log('🎉 APP.TSX handleAuthSuccess called with:', { token: token.substring(0, 20) + '...', email, username, subscriptionType });
+  const handleAuthSuccess = (token: string, email: string, username: string, subscriptionType?: string, userId?: number) => {
+    console.log('🎉 APP.TSX handleAuthSuccess called with:', { token: token.substring(0, 20) + '...', email, username, subscriptionType, userId });
     
     // Store authentication data
     localStorage.setItem('medMasterToken', token);
     localStorage.setItem('medMasterEmail', email);
     localStorage.setItem('medMasterUsername', username);
+    if (userId) {
+      localStorage.setItem('medMasterUserId', userId.toString());
+    }
     if (subscriptionType) {
       localStorage.setItem('medMasterSubscriptionType', subscriptionType);
     }
@@ -46,7 +50,7 @@ function AppContentWithAuth() {
     
     // Update the LandingAuthContext
     console.log('🔄 Calling login function...');
-    login(token, email, username, subscriptionType || 'demo');
+    login(token, email, username, userId || 0, subscriptionType || 'demo');
     
     // Close the auth modal
     setShowAuthModal(false);
@@ -133,10 +137,10 @@ function AppContentWithAuth() {
             element={
               <LandingLoginPage 
                 onBackToLanding={handleBackToLanding}
-                onAuthSuccess={(token, email, username, subscriptionType) => {
-                  handleAuthSuccess(token, email, username, subscriptionType);
-                  // After successful login, redirect back to pricing
-                  navigate('/pricing');
+                onAuthSuccess={(token, email, username, userId, subscriptionType) => {
+                  handleAuthSuccess(token, email, username, userId, subscriptionType);
+                  // After successful login, redirect back to home page
+                  navigate('/');
                 }}
                 onSwitchToSignup={() => navigate('/signup')}
               />
@@ -147,12 +151,20 @@ function AppContentWithAuth() {
             element={
               <LandingSignupPage 
                 onBackToLanding={handleBackToLanding}
-                onAuthSuccess={(token, email, username, subscriptionType) => {
-                  handleAuthSuccess(token, email, username, subscriptionType);
-                  // After successful signup, redirect back to pricing
-                  navigate('/pricing');
+                onAuthSuccess={(token, email, username, userId, subscriptionType) => {
+                  handleAuthSuccess(token, email, username, userId, subscriptionType);
+                  // After successful signup, redirect back to home page
+                  navigate('/');
                 }}
                 onSwitchToLogin={() => navigate('/login')}
+              />
+            } 
+          />
+          <Route 
+            path="/auth/action" 
+            element={
+              <FirebaseActionHandler 
+                onBackToLanding={handleBackToLanding}
               />
             } 
           />
