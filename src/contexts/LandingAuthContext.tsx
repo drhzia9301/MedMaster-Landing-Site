@@ -42,6 +42,12 @@ export const LandingAuthProvider: React.FC<LandingAuthProviderProps> = ({ childr
     };
     const authData: AuthData = { token, email, username, userId, subscriptionType };
     
+    // Store JWT token in localStorage for consistency with main app
+    localStorage.setItem('authToken', token);
+    localStorage.setItem('medMasterToken', token);
+    localStorage.setItem('medMasterEmail', email);
+    localStorage.setItem('medMasterUsername', username);
+    
     // Use cross-origin auth utility for better token management
     crossOriginAuth.storeAuthData(authData);
     
@@ -52,6 +58,12 @@ export const LandingAuthProvider: React.FC<LandingAuthProviderProps> = ({ childr
   };
 
   const logout = () => {
+    // Clear JWT token from localStorage
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('medMasterToken');
+    localStorage.removeItem('medMasterEmail');
+    localStorage.removeItem('medMasterUsername');
+    
     // Use cross-origin auth utility to clear all auth data
     crossOriginAuth.clearAuthData();
     setUser(null);

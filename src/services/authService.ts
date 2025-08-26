@@ -42,7 +42,7 @@ export interface AuthResponse {
 
 export const authService = {
   /**
-   * Login with email and password using Firebase
+   * Login with email and password using Firebase and sync with backend
    */
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     try {
@@ -50,20 +50,62 @@ export const authService = {
       
       const result = await signInWithEmailAndPasswordFirebase(email, password);
       
-      // Generate username from email for compatibility
-      const username = result.user.email?.split('@')[0] || 'User';
+      if (!result.user.emailVerified) {
+        return {
+          success: false,
+          needsVerification: true,
+          error: 'Please verify your email before logging in.'
+        };
+      }
+
+      // Get Firebase ID token and send to backend for JWT
+      const idToken = await result.user.getIdToken();
       
-      return {
-        success: true,
-        user: {
-          id: result.user.uid,
-          email: result.user.email || '',
-          username: username,
-          subscription_status: 'demo'
-        },
-        token: result.idToken,
-        userId: result.user.uid
-      };
+      try {
+        const response = await fetch(API_ENDPOINTS.auth.login, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            idToken: idToken
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Backend login failed');
+        }
+
+        const data = await response.json();
+        
+        return {
+          success: true,
+          user: {
+            id: result.user.uid,
+            email: data.email || result.user.email || '',
+            username: data.username || result.user.email?.split('@')[0] || 'User',
+            subscription_status: 'demo'
+          },
+          token: data.token, // Use JWT token from backend
+          userId: result.user.uid
+        };
+      } catch (backendError) {
+        console.warn('Backend login failed, using Firebase-only login:', backendError);
+        
+        // Fallback to Firebase-only login
+        return {
+          success: true,
+          user: {
+            id: result.user.uid,
+            email: result.user.email || '',
+            username: result.user.email?.split('@')[0] || 'User',
+            subscription_status: 'demo'
+          },
+          token: result.idToken,
+          userId: result.user.uid
+        };
+      }
     } catch (error: any) {
       console.error('Login error:', error);
       
