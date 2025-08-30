@@ -28,7 +28,7 @@ const FirebaseActionHandler: React.FC<FirebaseActionHandlerProps> = ({ onBackToL
     handleFirebaseAction(mode, continueUrl);
   }, [searchParams]);
 
-  const handleFirebaseAction = async (mode: string, continueUrl?: string | null) => {
+  const handleFirebaseAction = async (mode: string, _continueUrl?: string | null) => {
     const oobCode = searchParams.get('oobCode');
     const auth = getAuth();
 
