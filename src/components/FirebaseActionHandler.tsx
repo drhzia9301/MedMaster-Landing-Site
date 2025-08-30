@@ -40,23 +40,37 @@ const FirebaseActionHandler: React.FC<FirebaseActionHandlerProps> = ({ onBackToL
             setMessage('Email verified successfully! Setting up your account...');
 
             // Now sync the verified user with the backend database
-            const currentUser = auth.currentUser;
-            if (currentUser && currentUser.emailVerified) {
-              try {
-                console.log('🔄 Syncing verified user with backend database...');
-                const syncResult = await authService.syncVerifiedUser(currentUser);
+            try {
+              // Wait a moment for Firebase to update the user state
+              await new Promise(resolve => setTimeout(resolve, 1000));
 
-                if (syncResult.success) {
-                  console.log('✅ User successfully added to database after verification');
-                  setMessage('Email verified and account set up successfully! Redirecting to login...');
+              // Reload the user to get updated verification status
+              if (auth.currentUser) {
+                await auth.currentUser.reload();
+                const currentUser = auth.currentUser;
+
+                if (currentUser && currentUser.emailVerified) {
+                  console.log('🔄 Syncing verified user with backend database...');
+                  const syncResult = await authService.syncVerifiedUser(currentUser);
+
+                  if (syncResult.success) {
+                    console.log('✅ User successfully added to database after verification');
+                    setMessage('Email verified and account set up successfully! Redirecting to login...');
+                  } else {
+                    console.warn('⚠️ Email verified but backend sync failed:', syncResult.error);
+                    setMessage('Email verified successfully! You can now log in.');
+                  }
                 } else {
-                  console.warn('⚠️ Email verified but backend sync failed:', syncResult.error);
+                  console.warn('⚠️ User not found or not verified after reload');
                   setMessage('Email verified successfully! You can now log in.');
                 }
-              } catch (syncError) {
-                console.error('❌ Error syncing verified user:', syncError);
+              } else {
+                console.warn('⚠️ No current user found after verification');
                 setMessage('Email verified successfully! You can now log in.');
               }
+            } catch (syncError) {
+              console.error('❌ Error syncing verified user:', syncError);
+              setMessage('Email verified successfully! You can now log in.');
             }
 
             // Auto-redirect to login page after 3 seconds
