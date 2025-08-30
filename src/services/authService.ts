@@ -533,7 +533,7 @@ export const authService = {
 
       console.log('🔄 Syncing verified user with Railway backend...');
 
-      const response = await fetch(API_ENDPOINTS.auth.google, {
+      const response = await fetch(API_ENDPOINTS.auth.firebase, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
