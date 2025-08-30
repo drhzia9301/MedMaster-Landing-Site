@@ -155,61 +155,51 @@ export const authService = {
       // Step 2: Get Firebase ID token from result (already included)
       const idToken = result.idToken;
       
-      try {
-        const backendData = {
-          credential: idToken,
-          email: result.user.email || '',
-          username: username
-        };
-        
-        console.log('🔄 Syncing Firebase user with Railway backend...', {
-          endpoint: API_ENDPOINTS.auth.google,
-          domain: window.location.hostname
-        });
+      // DO NOT sync with backend until email is verified
+      // This ensures only verified users are added to the database
+      console.log('🔄 User created in Firebase, waiting for email verification before database sync');
 
-        const response = await fetch(API_ENDPOINTS.auth.google, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(backendData),
-          // Add timeout to prevent hanging
-          signal: AbortSignal.timeout(10000) // 10 second timeout
-        }).catch(fetchError => {
-          console.error('❌ Network error during backend sync:', {
-            error: fetchError.message,
-            endpoint: API_ENDPOINTS.auth.google
-          });
-          throw fetchError;
-        });
-
-        const backendResult = await response.json();
-        
-        if (!response.ok) {
-          console.warn('Railway backend sync failed:', backendResult.error);
-          // Continue with Firebase-only registration
-        } else {
-          console.log('✅ User successfully synced with Railway backend database');
-          
-          // Return Railway backend response for consistency
-          return {
-            success: true,
-            user: {
-              id: backendResult.user?.id || result.user.uid,
-              email: backendResult.user?.email || result.user.email || '',
-              username: backendResult.user?.username || username,
-              subscription_status: backendResult.user?.subscription_status || 'demo'
-            },
-            token: backendResult.token || idToken,
-            userId: backendResult.user?.id || result.user.uid,
-            isNewUser: backendResult.isNewUser || true,
-            message: 'Registration successful! Please check your email to verify your account before logging in.',
-            needsVerification: true
+      // Check if email is already verified (shouldn't be for new signups)
+      if (result.user.emailVerified) {
+        console.log('✅ Email already verified, syncing with backend...');
+        try {
+          const backendData = {
+            credential: idToken,
+            email: result.user.email || '',
+            username: username
           };
+
+          const response = await fetch(API_ENDPOINTS.auth.google, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(backendData),
+            signal: AbortSignal.timeout(10000)
+          });
+
+          const backendResult = await response.json();
+
+          if (response.ok) {
+            console.log('✅ Verified user synced with Railway backend database');
+            return {
+              success: true,
+              user: {
+                id: backendResult.user?.id || result.user.uid,
+                email: backendResult.user?.email || result.user.email || '',
+                username: backendResult.user?.username || username,
+                subscription_status: backendResult.user?.subscription_status || 'demo'
+              },
+              token: backendResult.token || idToken,
+              userId: backendResult.user?.id || result.user.uid,
+              isNewUser: backendResult.isNewUser || true,
+              message: 'Registration successful!',
+              needsVerification: false
+            };
+          }
+        } catch (backendError) {
+          console.warn('Backend sync failed for verified user:', backendError);
         }
-      } catch (backendError) {
-        console.warn('Railway backend sync failed:', backendError);
-        // Continue with Firebase-only registration
       }
       
       // Fallback to Firebase-only response
@@ -515,6 +505,72 @@ export const authService = {
       return {
         success: false,
         error: 'Failed to resend verification email'
+      };
+    }
+  },
+
+  /**
+   * Sync verified user with backend database
+   * This should only be called after email verification is complete
+   */
+  async syncVerifiedUser(firebaseUser: any): Promise<AuthResponse> {
+    try {
+      if (!firebaseUser.emailVerified) {
+        return {
+          success: false,
+          error: 'User email is not verified'
+        };
+      }
+
+      const idToken = await firebaseUser.getIdToken();
+      const username = firebaseUser.email?.split('@')[0] || 'User';
+
+      const backendData = {
+        credential: idToken,
+        email: firebaseUser.email || '',
+        username: username
+      };
+
+      console.log('🔄 Syncing verified user with Railway backend...');
+
+      const response = await fetch(API_ENDPOINTS.auth.google, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(backendData),
+        signal: AbortSignal.timeout(10000)
+      });
+
+      const backendResult = await response.json();
+
+      if (!response.ok) {
+        console.warn('Backend sync failed for verified user:', backendResult.error);
+        return {
+          success: false,
+          error: 'Failed to sync with backend database'
+        };
+      }
+
+      console.log('✅ Verified user successfully synced with Railway backend database');
+
+      return {
+        success: true,
+        user: {
+          id: backendResult.user?.id || firebaseUser.uid,
+          email: backendResult.user?.email || firebaseUser.email || '',
+          username: backendResult.user?.username || username,
+          subscription_status: backendResult.user?.subscription_status || 'demo'
+        },
+        token: backendResult.token || idToken,
+        userId: backendResult.user?.id || firebaseUser.uid,
+        isNewUser: backendResult.isNewUser || false
+      };
+    } catch (error: any) {
+      console.error('Error syncing verified user:', error);
+      return {
+        success: false,
+        error: 'Failed to sync verified user with backend'
       };
     }
   }

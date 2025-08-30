@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLandingAuth } from '../contexts/LandingAuthContext';
-import { User, LogOut, Crown, Shield, Zap } from 'lucide-react';
+import { User, LogOut, Crown, Shield, Zap, Play } from 'lucide-react';
 
 interface LandingProfileButtonProps {
   onGoToApp?: () => void;
@@ -35,7 +35,7 @@ const LandingProfileButton: React.FC<LandingProfileButtonProps> = ({ onGoToApp }
       case 'starter':
         return <Shield className="w-4 h-4 text-blue-400" />;
       default:
-        return <Zap className="w-4 h-4 text-gray-400" />;
+        return <Play className="w-4 h-4 text-gray-400" />;
     }
   };
 
