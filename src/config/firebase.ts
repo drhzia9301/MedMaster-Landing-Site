@@ -68,19 +68,21 @@ if (firebaseConfig.apiKey) {
   console.log('🔧 Initializing Firebase with config:', {
     apiKey: firebaseConfig.apiKey ? '***' : 'missing',
     authDomain: firebaseConfig.authDomain,
-    projectId: firebaseConfig.projectId
+    projectId: firebaseConfig.projectId,
+    environment: import.meta.env.MODE,
+    domain: typeof window !== 'undefined' ? window.location.hostname : 'server'
   });
-  
+
   app = initializeApp(firebaseConfig);
   auth = getAuth(app);
   googleProvider = new GoogleAuthProvider();
   
-  // Configure the provider with proper redirect handling
+  // Configure the provider to minimize double prompts
   googleProvider.setCustomParameters({
-    prompt: 'select_account'
+    prompt: 'select_account' // Keep select_account but handle better in popup
   });
-  
-  // Add localhost to authorized domains for development
+
+  // Add required scopes
   googleProvider.addScope('email');
   googleProvider.addScope('profile');
   
@@ -99,22 +101,29 @@ if (firebaseConfig.apiKey) {
   console.log('All environment variables:', import.meta.env);
 }
 
-// Google Sign-In function - use popup with proper error handling
+// Google Sign-In function - use popup with improved error handling
 export const signInWithGoogle = async () => {
   if (!auth || !googleProvider) {
+    console.error('❌ Firebase not configured properly');
     throw new Error('Firebase not configured');
   }
-  
+
+  console.log('🔄 Starting Google Sign-In process...');
+  console.log('🌐 Current domain:', window.location.hostname);
+  console.log('🔧 Auth domain:', auth.app.options.authDomain);
+
   try {
     console.log('🔄 Attempting Google Sign-In with popup method...');
+
+    // Try popup first with shorter timeout
     const result = await signInWithPopup(auth, googleProvider);
     const user = result.user;
-    
+
     console.log('✅ Popup sign-in successful:', user.email);
-    
+
     // Get the ID token
     const idToken = await user.getIdToken();
-    
+
     return {
       user: {
         uid: user.uid,
@@ -122,25 +131,53 @@ export const signInWithGoogle = async () => {
         displayName: user.displayName,
         photoURL: user.photoURL
       },
-      idToken
+      idToken,
+      method: 'popup'
     };
   } catch (error: any) {
     console.error('❌ Popup sign-in failed:', error);
-    
-    // If popup fails due to COOP or blocking, try redirect as fallback
-    if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user' || 
-        error.message?.includes('Cross-Origin-Opener-Policy')) {
+    console.error('Error details:', {
+      code: error.code,
+      message: error.message,
+      stack: error.stack
+    });
+
+    // Handle popup blocked errors
+    const isPopupBlocked = error.code === 'auth/popup-blocked' ||
+                          error.code === 'auth/popup-closed-by-user' ||
+                          error.code === 'auth/cancelled-popup-request' ||
+                          error.message?.includes('popup') ||
+                          error.message?.includes('blocked') ||
+                          error.message?.includes('Cross-Origin-Opener-Policy') ||
+                          error.message?.includes('timeout');
+
+    if (isPopupBlocked) {
+      console.log('🔄 Popup blocked, closed, or timed out. Trying redirect method...');
+
       try {
-        console.log('🔄 Popup blocked, trying redirect method...');
         await signInWithRedirect(auth, googleProvider);
-        return { pending: true };
+        return {
+          pending: true,
+          method: 'redirect',
+          message: 'Popup was blocked. Redirecting to Google Sign-In...'
+        };
       } catch (redirectError: any) {
         console.error('❌ Both popup and redirect failed:', redirectError);
-        throw new Error('Google Sign-In failed. Please ensure popups are allowed or try again.');
+        throw new Error('Google Sign-In failed. Please ensure popups are allowed or try refreshing the page.');
       }
     }
-    
-    throw error;
+
+    // Handle network errors
+    if (error.code === 'auth/network-request-failed') {
+      throw new Error('Network error. Please check your internet connection and try again.');
+    }
+
+    if (error.code === 'auth/too-many-requests') {
+      throw new Error('Too many sign-in attempts. Please wait a moment and try again.');
+    }
+
+    // Generic error
+    throw new Error(`Google Sign-In failed: ${error.message || 'Unknown error'}`);
   }
 };
 

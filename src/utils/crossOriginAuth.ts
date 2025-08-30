@@ -7,7 +7,7 @@ export interface AuthData {
   token: string;
   email: string;
   username: string;
-  userId: number;
+  userId: string; // Changed to string for UUID compatibility
   subscriptionType?: string;
 }
 
@@ -131,7 +131,7 @@ export class CrossOriginAuth {
       token,
       email,
       username,
-      userId: userId ? parseInt(userId, 10) : 0,
+      userId: userId || '0',
       subscriptionType: subscriptionType || 'demo'
     };
   }

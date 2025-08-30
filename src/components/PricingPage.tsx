@@ -101,7 +101,7 @@ function PricingPage({ onShowLandingLogin, onBackToLanding }: PricingPageProps) 
           if (!user?.id) {
             throw new Error('User not found');
           }
-          const result = await supabaseHelpers.cancelUserSubscription(user.id);
+          const result = await supabaseHelpers.cancelUserSubscription(parseInt(user.id));
           
           if (result.success) {
             await refreshSubscriptionStatus();
@@ -130,7 +130,7 @@ function PricingPage({ onShowLandingLogin, onBackToLanding }: PricingPageProps) 
             if (!user?.id) {
               throw new Error('User not found');
             }
-            const result = await supabaseHelpers.cancelUserSubscription(user.id);
+            const result = await supabaseHelpers.cancelUserSubscription(parseInt(user.id));
             
             if (result.success) {
               await refreshSubscriptionStatus();
@@ -145,7 +145,7 @@ function PricingPage({ onShowLandingLogin, onBackToLanding }: PricingPageProps) 
             if (!user?.id) {
               throw new Error('User not found');
             }
-            const result = await supabaseHelpers.updateUserSubscriptionByUserId(user.id, {
+            const result = await supabaseHelpers.updateUserSubscriptionByUserId(parseInt(user.id), {
               plan_id: planIdMap.starter,
               subscription_type: 'starter'
             });
@@ -169,7 +169,7 @@ function PricingPage({ onShowLandingLogin, onBackToLanding }: PricingPageProps) 
             if (!user?.id) {
               throw new Error('User not found');
             }
-            const result = await supabaseHelpers.updateUserSubscriptionByUserId(user.id, {
+            const result = await supabaseHelpers.updateUserSubscriptionByUserId(parseInt(user.id), {
               plan_id: planIdMap.popular,
               subscription_type: 'premium'
             });

@@ -7,7 +7,7 @@ import GoogleSignIn from './GoogleSignIn';
 import { handleRedirectResult } from '../config/firebase';
 
 interface AuthPageProps {
-  onAuthSuccess: (token: string, email: string, username: string, subscriptionType?: string, userId?: number) => void;
+  onAuthSuccess: (token: string, email: string, username: string, subscriptionType?: string, userId?: string) => void;
   onBackToLanding?: () => void;
   initialMode?: 'login' | 'signup';
 }
@@ -38,33 +38,65 @@ const AuthPage: React.FC<AuthPageProps> = ({ onAuthSuccess, onBackToLanding, ini
     checkRedirectResult();
   }, []);
 
-  const handleGoogleSignIn = async (_credential: string) => {
+  const handleGoogleSignIn = async (firebaseData: any) => {
     setError(null);
     setLoading(true);
 
     try {
-      // For Google sign-in, we need to use Firebase first, then register with authService
-      // This is a placeholder - Google sign-in needs proper Firebase integration
-      throw new Error('Google sign-in not implemented yet');
+      console.log('🔄 AuthPage: Processing Google Sign-In with Firebase data:', {
+        uid: firebaseData?.uid,
+        email: firebaseData?.email,
+        displayName: firebaseData?.displayName,
+        hasIdToken: !!firebaseData?.idToken
+      });
       
-      // TODO: Implement proper Google sign-in flow
-      // const result = await authService.googleSignIn(credential);
-      // if (result.success && result.user && result.token) {
-      //   localStorage.setItem('medMasterToken', result.token);
-      //   try {
-      //     const subscriptionStatus = await subscriptionService.getSubscriptionStatus(result.user.id);
-      //     onAuthSuccess(result.token, result.user.email, result.user.username, subscriptionStatus.subscription_type);
-      //     toast.success('Welcome! Logged in with Google successfully.');
-      //   } catch (subscriptionError) {
-      //     console.warn('Could not fetch subscription status:', subscriptionError);
-      //     onAuthSuccess(result.token, result.user.email, result.user.username, 'demo');
-      //     toast.success('Welcome! Logged in successfully.');
-      //   }
-      // } else {
-      //   throw new Error(result.error || 'Google authentication failed');
-      // }
+      // Use authService.registerFirebase to sync with backend
+      const result = await authService.registerFirebase(firebaseData);
+      
+      console.log('📥 AuthPage: registerFirebase result:', {
+        success: result.success,
+        hasUser: !!result.user,
+        hasToken: !!result.token,
+        error: result.error,
+        userId: result.userId
+      });
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Google authentication failed - backend returned unsuccessful response');
+      }
+      
+      if (!result.user) {
+        throw new Error('Google authentication failed - no user data received from backend');
+      }
+      
+      if (!result.token) {
+        throw new Error('Google authentication failed - no authentication token received from backend');
+      }
+
+      console.log('✅ AuthPage: Google authentication successful:', {
+        userId: result.user.id,
+        email: result.user.email,
+        username: result.user.username
+      });
+
+      // Store token
+      localStorage.setItem('medMasterToken', result.token);
+      localStorage.setItem('authToken', result.token); // For consistency with main app
+      
+      // Fetch subscription status after successful authentication
+      try {
+        const subscriptionStatus = await subscriptionService.getSubscriptionStatus();
+        onAuthSuccess(result.token, result.user.email, result.user.username, subscriptionStatus.subscription_type, result.user.id.toString());
+        toast.success(`Welcome ${result.user.username}! Logged in with Google successfully.`);
+      } catch (subscriptionError) {
+        console.warn('Could not fetch subscription status:', subscriptionError);
+        // Continue with login even if subscription fetch fails
+        onAuthSuccess(result.token, result.user.email, result.user.username, 'demo', result.user.id.toString());
+        toast.success('Welcome! Logged in with Google successfully.');
+      }
     } catch (err: any) {
       const errorMessage = err.message || 'An error occurred during Google sign-in';
+      console.error('❌ AuthPage: Google Sign-In error:', errorMessage);
       
       setError(errorMessage);
       toast.error(errorMessage);
@@ -100,15 +132,15 @@ const AuthPage: React.FC<AuthPageProps> = ({ onAuthSuccess, onBackToLanding, ini
       
       // Fetch subscription status after successful authentication
       try {
-        const subscriptionStatus = await subscriptionService.getSubscriptionStatus(authResult.user.id);
-        onAuthSuccess(authResult.token, authResult.user.email, authResult.user.username, subscriptionStatus.subscription_type, authResult.user.id);
+        const subscriptionStatus = await subscriptionService.getSubscriptionStatus();
+        onAuthSuccess(authResult.token, authResult.user.email, authResult.user.username, subscriptionStatus.subscription_type, authResult.user.id.toString());
         
         // Show welcome message
         toast.success(`Welcome ${authResult.user.username}! ${isLogin ? 'Logged in' : 'Account created'} successfully.`);
       } catch (subscriptionError) {
           console.warn('Could not fetch subscription status:', subscriptionError);
           // Continue with login even if subscription fetch fails
-          onAuthSuccess(authResult.token, authResult.user.email, authResult.user.username, 'demo', authResult.user.id);
+          onAuthSuccess(authResult.token, authResult.user.email, authResult.user.username, 'demo', authResult.user.id.toString());
           toast.success('Welcome! Logged in successfully.');
       }
     } catch (err: any) {

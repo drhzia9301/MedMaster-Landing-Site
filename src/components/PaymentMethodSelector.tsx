@@ -71,7 +71,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
         throw new Error('User authentication required');
       }
       
-      const session = await paymentService.createPaymentSession(planId, user.id, selectedMethod);
+      const session = await paymentService.createPaymentSession(planId, parseInt(user.id), selectedMethod);
       
       if (session.success) {
         setPaymentSession(session);

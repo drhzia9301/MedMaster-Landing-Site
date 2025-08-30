@@ -22,37 +22,60 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({
   useEffect(() => {
     const checkRedirectResult = async () => {
       try {
+        console.log('🔍 GoogleSignIn: Checking for redirect result on component mount...');
         const result = await handleRedirectResult();
         if (result && result.idToken && result.user) {
-          console.log('Redirect result found:', result);
-          onSuccess({
+          console.log('✅ GoogleSignIn: Redirect result found:', {
+            uid: result.user.uid,
+            email: result.user.email,
+            displayName: result.user.displayName,
+            hasIdToken: !!result.idToken,
+            idTokenLength: result.idToken?.length
+          });
+          const userData = {
             uid: result.user.uid,
             email: result.user.email,
             displayName: result.user.displayName,
             photoURL: result.user.photoURL,
             idToken: result.idToken
-          });
+          };
+          console.log('🚀 GoogleSignIn: Calling onSuccess with userData:', userData);
+          onSuccess(userData);
+        } else {
+          console.log('ℹ️ GoogleSignIn: No redirect result found on mount');
         }
       } catch (error: any) {
-        console.error('Error handling redirect result:', error);
-        onError?.('Authentication failed after redirect. Please try again.');
+        console.error('❌ GoogleSignIn: Error handling redirect result:', error);
+        // Don't call onError here to prevent infinite loops
+        // onError?.('Authentication failed after redirect. Please try again.');
       }
     };
 
-    checkRedirectResult();
+    // Add a small delay to prevent rapid successive calls
+    const timeoutId = setTimeout(checkRedirectResult, 100);
+    return () => clearTimeout(timeoutId);
   }, []); // Empty dependency array - only run once on mount
 
   const handleGoogleSignIn = async () => {
     if (disabled || isLoading) return;
     
+    console.log('🔄 GoogleSignIn: Starting Google Sign-In process...');
     setIsLoading(true);
     
     try {
+      console.log('📞 GoogleSignIn: Calling signInWithGoogle()...');
       const result = await signInWithGoogle();
+      console.log('📥 GoogleSignIn: signInWithGoogle() result:', {
+        pending: result.pending,
+        hasUser: !!result.user,
+        hasIdToken: !!result.idToken,
+        userEmail: result.user?.email,
+        idTokenLength: result.idToken?.length
+      });
       
       // Check if it's a pending redirect
       if (result.pending) {
-        console.log('Redirecting to Google Sign-In...');
+        console.log('🔄 GoogleSignIn: Redirecting to Google Sign-In...');
         setShowPopupNotice(true);
         setIsLoading(false);
         return;
@@ -60,18 +83,33 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({
       
       // Pass the complete user data to the parent component
       if (result.idToken && result.user) {
-        onSuccess({
+        const userData = {
           uid: result.user.uid,
           email: result.user.email,
           displayName: result.user.displayName,
           photoURL: result.user.photoURL,
           idToken: result.idToken
-        });
+        };
+        console.log('✅ GoogleSignIn: Authentication successful, calling onSuccess with:', userData);
+        
+        try {
+          onSuccess(userData);
+          console.log('✅ GoogleSignIn: onSuccess callback completed successfully');
+        } catch (callbackError) {
+          console.error('❌ GoogleSignIn: Error in onSuccess callback:', callbackError);
+          const errorMessage = callbackError instanceof Error ? callbackError.message : 'Unknown error occurred';
+          onError?.(`Authentication callback failed: ${errorMessage}`);
+        }
       } else {
+        console.error('❌ GoogleSignIn: Missing required data - idToken or user:', {
+          hasIdToken: !!result.idToken,
+          hasUser: !!result.user,
+          resultKeys: Object.keys(result || {})
+        });
         onError?.('Failed to get authentication token');
       }
     } catch (error: any) {
-      console.error('Google Sign-In error:', error);
+      console.error('❌ GoogleSignIn: Google Sign-In error:', error);
       
       let errorMessage = 'Failed to sign in with Google';
       
@@ -99,13 +137,18 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({
     setShowPopupNotice(false);
     setIsLoading(true);
     try {
-      const result = await signInWithGoogle(true); // Force redirect
+      // Force redirect method by calling signInWithGoogle again
+      // The popup should fail and automatically trigger redirect
+      const result = await signInWithGoogle();
       if (result.pending) {
-        console.log('Redirecting to Google Sign-In...');
+        console.log('🔄 GoogleSignIn: Redirecting to Google Sign-In...');
+        // Don't set loading to false here, let the redirect happen
         return;
       }
+      // If we get here, popup worked
+      setIsLoading(false);
     } catch (error: any) {
-      console.error('Redirect sign-in failed:', error);
+      console.error('❌ GoogleSignIn: Retry with redirect failed:', error);
       onError?.('Sign-in failed. Please try again.');
       setIsLoading(false);
     }

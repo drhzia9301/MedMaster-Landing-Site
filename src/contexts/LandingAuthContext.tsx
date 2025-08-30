@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { subscriptionService } from '../services/subscriptionService';
+import { authService } from '../services/authService';
 import { crossOriginAuth, AuthData } from '../utils/crossOriginAuth';
 
 interface User {
-  id: number;
+  id: string; // Changed to string for UUID compatibility
   username: string;
   email: string;
   subscriptionType: string;
@@ -16,9 +17,13 @@ interface User {
 interface LandingAuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  login: (token: string, email: string, username: string, userId: number, subscriptionType?: string) => void;
+  isLoading: boolean;
+  login: (token: string, email: string, username: string, userId: string, subscriptionType?: string) => void;
+  loginWithCredentials: (email: string, password: string) => Promise<{ success: boolean; message?: string; token?: string; user?: User }>;
+  register: (email: string, password: string) => Promise<{ success: boolean; message?: string; token?: string; user?: User }>;
   logout: () => void;
   refreshSubscriptionStatus: () => Promise<void>;
+  checkAuthStatus: () => Promise<void>;
 }
 
 const LandingAuthContext = createContext<LandingAuthContextType | undefined>(undefined);
@@ -30,10 +35,9 @@ interface LandingAuthProviderProps {
 export const LandingAuthProvider: React.FC<LandingAuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const login = (token: string, email: string, username: string, userId: number, subscriptionType: string = 'demo') => {
-    console.log('🔐 LandingAuthContext.login called with:', { token: token.substring(0, 20) + '...', email, username, userId, subscriptionType });
-    
+  const login = (token: string, email: string, username: string, userId: string, subscriptionType: string = 'demo') => {
     const userData: User = {
       id: userId,
       username,
@@ -41,20 +45,65 @@ export const LandingAuthProvider: React.FC<LandingAuthProviderProps> = ({ childr
       subscriptionType
     };
     const authData: AuthData = { token, email, username, userId, subscriptionType };
-    
+
     // Store JWT token in localStorage for consistency with main app
     localStorage.setItem('authToken', token);
     localStorage.setItem('medMasterToken', token);
     localStorage.setItem('medMasterEmail', email);
     localStorage.setItem('medMasterUsername', username);
-    
+
     // Use cross-origin auth utility for better token management
     crossOriginAuth.storeAuthData(authData);
-    
+
     setUser(userData);
     setIsAuthenticated(true);
-    
-    console.log('✅ LandingAuthContext state updated - isAuthenticated:', true);
+  };
+
+  const loginWithCredentials = async (email: string, password: string) => {
+    try {
+      const result = await authService.login({ email, password });
+
+      if (result.success && result.user) {
+        const userData = {
+          id: result.user.id.toString(),
+          username: result.user.username,
+          email: result.user.email,
+          subscriptionType: result.user.subscription_status || 'demo'
+        };
+
+        // Store authentication data
+        localStorage.setItem('medMasterToken', result.token || '');
+        localStorage.setItem('medMasterEmail', userData.email);
+        localStorage.setItem('medMasterUsername', userData.username);
+        localStorage.setItem('medMasterUserId', userData.id);
+        localStorage.setItem('medMasterSubscriptionType', userData.subscriptionType);
+
+        // Update context state
+        login(result.token || '', userData.email, userData.username, userData.id, userData.subscriptionType);
+
+        return { success: true, token: result.token, user: userData };
+      } else {
+        return { success: false, message: result.error || 'Login failed' };
+      }
+    } catch (error: any) {
+      return { success: false, message: 'Login failed' };
+    }
+  };
+
+  const register = async (email: string, password: string) => {
+    try {
+      const result = await authService.register({ email, password });
+
+      if (result.success) {
+        // After successful registration, log the user in
+        const loginResult = await loginWithCredentials(email, password);
+        return loginResult;
+      } else {
+        return { success: false, message: result.error || 'Registration failed' };
+      }
+    } catch (error: any) {
+      return { success: false, message: 'Registration failed' };
+    }
   };
 
   const logout = () => {
@@ -63,7 +112,9 @@ export const LandingAuthProvider: React.FC<LandingAuthProviderProps> = ({ childr
     localStorage.removeItem('medMasterToken');
     localStorage.removeItem('medMasterEmail');
     localStorage.removeItem('medMasterUsername');
-    
+    localStorage.removeItem('medMasterUserId');
+    localStorage.removeItem('medMasterSubscriptionType');
+
     // Use cross-origin auth utility to clear all auth data
     crossOriginAuth.clearAuthData();
     setUser(null);
@@ -76,27 +127,25 @@ export const LandingAuthProvider: React.FC<LandingAuthProviderProps> = ({ childr
     if (!authData || !currentUser) return;
 
     try {
-      console.log('🔄 Refreshing subscription status...');
-      
       // Temporarily set the main token for API call
       const originalToken = localStorage.getItem('medMasterToken');
       localStorage.setItem('medMasterToken', authData.token);
-      
+
       // Add timeout to prevent hanging
-      const timeoutPromise = new Promise((_, reject) => 
+      const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Subscription status request timeout')), 5000)
       );
-      
+
       const subscriptionPromise = subscriptionService.getSubscriptionStatus();
       const subscriptionStatus = await Promise.race([subscriptionPromise, timeoutPromise]) as any;
-      
+
       // Restore original token
       if (originalToken) {
         localStorage.setItem('medMasterToken', originalToken);
       } else {
         localStorage.removeItem('medMasterToken');
       }
-      
+
       // Update user with latest subscription status
       const updatedUser = {
         ...currentUser,
@@ -106,10 +155,9 @@ export const LandingAuthProvider: React.FC<LandingAuthProviderProps> = ({ childr
         endDate: subscriptionStatus.end_date,
         daysRemaining: subscriptionStatus.days_remaining
       };
-      
-      console.log('✅ Subscription status updated:', subscriptionStatus.subscription_type);
+
       setUser(updatedUser);
-      
+
       // Update stored auth data with new subscription status
       const updatedAuthData: AuthData = {
         ...authData,
@@ -117,7 +165,6 @@ export const LandingAuthProvider: React.FC<LandingAuthProviderProps> = ({ childr
       };
       crossOriginAuth.storeAuthData(updatedAuthData);
     } catch (error) {
-      console.error('❌ Error refreshing subscription status:', error);
       // Don't fail the whole auth flow if subscription refresh fails
       // Restore original token in case of error
       const originalToken = localStorage.getItem('medMasterToken');
@@ -127,97 +174,110 @@ export const LandingAuthProvider: React.FC<LandingAuthProviderProps> = ({ childr
     }
   };
 
+  const checkAuthStatus = async () => {
+    setIsLoading(true);
+    try {
+      // Check if token exists in localStorage
+      const token = localStorage.getItem('medMasterToken');
+      const email = localStorage.getItem('medMasterEmail');
+      const username = localStorage.getItem('medMasterUsername');
+
+      if (!token || !email || !username) {
+        setIsLoading(false);
+        return;
+      }
+
+      // For now, if we have stored credentials, consider user authenticated
+      // In a full implementation, this would validate the token with the backend
+      const userData = {
+        id: localStorage.getItem('medMasterUserId') || '0',
+        username,
+        email,
+        subscriptionType: localStorage.getItem('medMasterSubscriptionType') || 'demo'
+      };
+
+      setUser(userData);
+      setIsAuthenticated(true);
+    } catch (error) {
+      // Clear any stored auth data
+      logout();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Check for existing authentication on mount and when localStorage changes
   useEffect(() => {
     const checkExistingAuth = async () => {
-      console.log('🔍 Checking existing auth...');
-      
       // Test localStorage access
       try {
         localStorage.setItem('test', 'working');
-        const testValue = localStorage.getItem('test');
-        console.log('🧪 localStorage test:', testValue === 'working' ? 'Working' : 'Failed');
+        localStorage.getItem('test');
         localStorage.removeItem('test');
       } catch (error) {
-        console.error('❌ localStorage access error:', error);
+        // localStorage access error - handle silently
       }
-      
+
       // First check cross-origin auth data
       let authData = crossOriginAuth.getAuthData();
-      console.log('📋 Cross-origin auth data:', authData ? 'Found' : 'Not found');
-      
+
       // If no cross-origin auth data, check main app tokens
       if (!authData) {
         const token = localStorage.getItem('medMasterToken');
         const email = localStorage.getItem('medMasterEmail');
         const username = localStorage.getItem('medMasterUsername');
-        
-        console.log('🔑 Main app tokens:', { 
-          token: token ? token.substring(0, 20) + '...' : 'None', 
-          email: email || 'None', 
-          username: username || 'None' 
-        });
-        
-        // Also check all localStorage keys
-        console.log('📦 All localStorage keys:', Object.keys(localStorage));
-        
+
         if (token && email && username) {
           authData = {
             token,
             email,
             username,
-            userId: 0, // Default, will be updated if available
+            userId: '0', // Default, will be updated if available
             subscriptionType: 'demo' // Default, will be updated below
           };
-          console.log('✅ Created authData from main app tokens');
         }
       }
-      
+
       if (authData) {
-        console.log('🎯 Auth data found, setting user state...');
         try {
           const parsedUser = {
-            id: authData.userId || 0,
+            id: authData.userId || '0',
             username: authData.username,
             email: authData.email,
             subscriptionType: authData.subscriptionType || 'demo'
           };
           setUser(parsedUser);
           setIsAuthenticated(true);
-          console.log('✅ User state set - isAuthenticated: true, user:', parsedUser);
-          
+
           // Refresh subscription status after setting user data
           // Use a separate function to avoid dependency issues
           try {
-            console.log('🔄 Refreshing subscription status on mount...');
-            
             // Temporarily set the main token for API call
             const originalToken = localStorage.getItem('medMasterToken');
             localStorage.setItem('medMasterToken', authData.token);
-            
+
             const subscriptionStatus = await subscriptionService.getSubscriptionStatus();
-            
+
             // Restore original token
             if (originalToken) {
               localStorage.setItem('medMasterToken', originalToken);
             } else {
               localStorage.removeItem('medMasterToken');
             }
-            
+
             // Update user with latest subscription status
             const updatedUser = {
               ...parsedUser,
-              id: authData.userId || 0,
+              id: authData.userId || '0',
               subscriptionType: subscriptionStatus.subscription_type,
               subscriptionStatus: subscriptionStatus.status,
               planName: subscriptionStatus.plan_name,
               endDate: subscriptionStatus.end_date,
               daysRemaining: subscriptionStatus.days_remaining
             };
-            
-            console.log('✅ Subscription status updated on mount:', subscriptionStatus.subscription_type);
+
             setUser(updatedUser);
-            
+
             // Update stored auth data with new subscription status
             const updatedAuthData: AuthData = {
               ...authData,
@@ -225,15 +285,11 @@ export const LandingAuthProvider: React.FC<LandingAuthProviderProps> = ({ childr
             };
             crossOriginAuth.storeAuthData(updatedAuthData);
           } catch (error) {
-            console.error('Error refreshing subscription on mount:', error);
             // Continue with cached user data if refresh fails
           }
         } catch (error) {
-          console.error('Error parsing stored user data:', error);
           logout();
         }
-      } else {
-        console.log('❌ No auth data found');
       }
     };
 
@@ -241,9 +297,7 @@ export const LandingAuthProvider: React.FC<LandingAuthProviderProps> = ({ childr
 
     // Listen for localStorage changes (for when auth data is added by other components)
     const handleStorageChange = (e: StorageEvent) => {
-      console.log('📦 localStorage change detected:', e.key);
       if (e.key === 'medMasterToken' || e.key === 'landingPageToken') {
-        console.log('🔄 Triggering auth check due to localStorage change');
         checkExistingAuth();
       }
     };
@@ -262,9 +316,13 @@ export const LandingAuthProvider: React.FC<LandingAuthProviderProps> = ({ childr
   const value: LandingAuthContextType = {
     user,
     isAuthenticated,
+    isLoading,
     login,
+    loginWithCredentials,
+    register,
     logout,
-    refreshSubscriptionStatus
+    refreshSubscriptionStatus,
+    checkAuthStatus
   };
 
   return (

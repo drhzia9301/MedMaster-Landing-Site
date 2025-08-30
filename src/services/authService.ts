@@ -10,7 +10,7 @@ import {
   auth
 } from '../config/firebase';
 // Remove unused import since we're not using Firebase User type directly
-import { API_ENDPOINTS } from '../config/api';
+import { API_ENDPOINTS, API_BASE_URL } from '../config/api';
 
 export interface LoginCredentials {
   email: string;
@@ -58,8 +58,8 @@ export const authService = {
         };
       }
 
-      // Get Firebase ID token and send to backend for JWT
-      const idToken = await result.user.getIdToken();
+      // Get Firebase ID token from result (already included)
+      const idToken = result.idToken;
       
       try {
         const response = await fetch(API_ENDPOINTS.auth.login, {
@@ -69,31 +69,33 @@ export const authService = {
           },
           body: JSON.stringify({
             idToken: idToken
-          })
+          }),
+          // Add timeout to prevent hanging
+          signal: AbortSignal.timeout(10000) // 10 second timeout
         });
 
         if (!response.ok) {
-          const errorData = await response.json();
+          const errorData = await response.json().catch(() => ({ message: 'Backend login failed' }));
           throw new Error(errorData.message || 'Backend login failed');
         }
 
         const data = await response.json();
-        
+
         return {
           success: true,
           user: {
             id: result.user.uid,
             email: data.email || result.user.email || '',
             username: data.username || result.user.email?.split('@')[0] || 'User',
-            subscription_status: 'demo'
+            subscription_status: data.subscription_status || 'demo'
           },
-          token: data.token, // Use JWT token from backend
+          token: data.token || idToken, // Use backend token if available, fallback to Firebase token
           userId: result.user.uid
         };
       } catch (backendError) {
         console.warn('Backend login failed, using Firebase-only login:', backendError);
-        
-        // Fallback to Firebase-only login
+
+        // Fallback to Firebase-only login - this ensures the app always works
         return {
           success: true,
           user: {
@@ -102,7 +104,7 @@ export const authService = {
             username: result.user.email?.split('@')[0] || 'User',
             subscription_status: 'demo'
           },
-          token: result.idToken,
+          token: idToken,
           userId: result.user.uid
         };
       }
@@ -150,24 +152,37 @@ export const authService = {
       // Generate username from email for compatibility
       const username = result.user.email?.split('@')[0] || 'User';
       
-      // Step 2: Sync with Railway backend (same as main app)
+      // Step 2: Get Firebase ID token from result (already included)
+      const idToken = result.idToken;
+      
       try {
         const backendData = {
-          credential: result.idToken,
+          credential: idToken,
           email: result.user.email || '',
           username: username
         };
         
-        console.log('🔄 Syncing Firebase user with Railway backend...');
-        
-        const response = await fetch(API_ENDPOINTS.auth.registerFirebase, {
+        console.log('🔄 Syncing Firebase user with Railway backend...', {
+          endpoint: API_ENDPOINTS.auth.google,
+          domain: window.location.hostname
+        });
+
+        const response = await fetch(API_ENDPOINTS.auth.google, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify(backendData),
+          // Add timeout to prevent hanging
+          signal: AbortSignal.timeout(10000) // 10 second timeout
+        }).catch(fetchError => {
+          console.error('❌ Network error during backend sync:', {
+            error: fetchError.message,
+            endpoint: API_ENDPOINTS.auth.google
+          });
+          throw fetchError;
         });
-        
+
         const backendResult = await response.json();
         
         if (!response.ok) {
@@ -185,7 +200,7 @@ export const authService = {
               username: backendResult.user?.username || username,
               subscription_status: backendResult.user?.subscription_status || 'demo'
             },
-            token: backendResult.token || result.idToken,
+            token: backendResult.token || idToken,
             userId: backendResult.user?.id || result.user.uid,
             isNewUser: backendResult.isNewUser || true,
             message: 'Registration successful! Please check your email to verify your account before logging in.',
@@ -243,45 +258,142 @@ export const authService = {
   },
 
   /**
-   * Register with Firebase (Google OAuth) - keeping for compatibility
+   * Sync user with Google OAuth backend endpoint (handles both sign-up and sign-in)
    */
   async registerFirebase(firebaseData: any): Promise<AuthResponse> {
     try {
-      // Map the frontend data structure to what the backend expects
+      console.log('🔄 AuthService: registerFirebase called with:', {
+        uid: firebaseData?.uid,
+        email: firebaseData?.email,
+        displayName: firebaseData?.displayName,
+        hasIdToken: !!firebaseData?.idToken,
+        idTokenLength: firebaseData?.idToken?.length
+      });
+      
+      console.log('[AuthService] API_BASE_URL:', API_BASE_URL);
+      console.log('[AuthService] Environment:', import.meta.env.MODE);
+      console.log('[AuthService] VITE_API_URL:', import.meta.env.VITE_API_URL);
+
+      // Use the Google OAuth endpoint instead of register-firebase
       const backendData = {
-        credential: firebaseData.idToken, // Backend expects 'credential', frontend sends 'idToken'
-        email: firebaseData.email,
-        username: firebaseData.displayName || firebaseData.email?.split('@')[0] || 'User'
+        credential: firebaseData.idToken // Google endpoint expects just the credential
       };
-      
-      console.log('🔄 Sending to backend:', { ...backendData, credential: '[REDACTED]' });
-      
-      const response = await fetch(API_ENDPOINTS.auth.registerFirebase, {
+
+      console.log('🔄 AuthService: Sending to Google OAuth endpoint:', {
+        ...backendData,
+        credential: '[REDACTED]',
+        endpoint: API_ENDPOINTS.auth.google,
+        currentDomain: window.location.hostname,
+        userAgent: navigator.userAgent
+      });
+
+      const response = await fetch(API_ENDPOINTS.auth.google, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(backendData),
+      }).catch(fetchError => {
+        console.error('❌ AuthService: Network error during fetch:', {
+          error: fetchError.message,
+          stack: fetchError.stack,
+          endpoint: API_ENDPOINTS.auth.google
+        });
+        throw fetchError;
       });
       
-      const data = await response.json();
+      console.log('📥 AuthService: Backend response status:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        headers: Object.fromEntries(response.headers.entries())
+      });
+      
+      // Parse JSON response directly
+      let data;
+      try {
+        data = await response.json();
+        console.log('📥 AuthService: Raw response data:', data);
+      } catch (parseError) {
+        console.error('❌ AuthService: JSON parse error:', parseError);
+        // Fallback: try to get response as text for debugging
+        try {
+          const responseText = await response.text();
+          console.log('📥 AuthService: Raw response text (fallback):', responseText);
+        } catch (textError) {
+          console.log('📥 AuthService: Could not read response as text either');
+        }
+        throw new Error('Invalid JSON response from server');
+      }
+      
+      console.log('📥 AuthService: Backend response data:', {
+        success: data.success,
+        hasUser: !!data.user,
+        hasToken: !!data.token,
+        userId: data.userId,
+        isNewUser: data.isNewUser,
+        error: data.error,
+        message: data.message
+      });
+
+      console.log('📥 AuthService: Full response object keys:', Object.keys(data));
+      console.log('📥 AuthService: Response data types:', {
+        successType: typeof data.success,
+        userType: typeof data.user,
+        tokenType: typeof data.token,
+        userIdType: typeof data.userId
+      });
+      
+      console.log('📥 AuthService: Raw data object:', data);
       
       if (!response.ok) {
+        console.error('❌ AuthService: Backend request failed:', {
+          status: response.status,
+          error: data.error || 'Firebase registration failed'
+        });
         return {
           success: false,
           error: data.error || 'Firebase registration failed'
         };
       }
       
-      return {
+      // Validate response data structure
+      console.log('🔍 AuthService: Detailed response validation:', {
+        dataKeys: Object.keys(data),
+        userExists: 'user' in data,
+        tokenExists: 'token' in data,
+        userValue: data.user,
+        tokenValue: data.token ? '[TOKEN_PRESENT]' : null,
+        userType: typeof data.user,
+        tokenType: typeof data.token,
+        fullResponse: JSON.stringify(data, null, 2)
+      });
+      
+      if (!data.user || !data.token) {
+        console.error('❌ AuthService: Invalid response structure:', {
+          hasUser: !!data.user,
+          hasToken: !!data.token,
+          rawData: data
+        });
+        return {
+          success: false,
+          error: 'Invalid response from server. Missing user or token data.'
+        };
+      }
+      
+      console.log('✅ AuthService: Backend registration successful');
+      const result = {
         success: true,
         user: data.user,
         token: data.token,
-        userId: data.userId,
+        userId: data.userId || data.user.id,
         isNewUser: data.isNewUser
       };
+      
+      console.log('🔍 AuthService: Final response being returned:', result);
+      return result;
     } catch (error) {
-      console.error('Firebase registration error:', error);
+      console.error('❌ AuthService: Firebase registration error:', error);
       return {
         success: false,
         error: 'Firebase registration failed. Please try again.'
@@ -290,41 +402,100 @@ export const authService = {
   },
 
   /**
-   * Get user profile using Firebase Auth
+   * Get user profile using backend API endpoint
    */
   async getProfile(): Promise<AuthResponse> {
     try {
-      if (!auth) {
-        throw new Error('Firebase auth not initialized');
-      }
-      // Get current user from Firebase Auth
-      const user = auth.currentUser;
+      // Get token from localStorage (consistent with main app)
+      const token = localStorage.getItem('authToken');
       
-      if (!user) {
+      if (!token) {
         return {
           success: false,
-          error: 'User not found or invalid token'
+          error: 'No authentication token found'
         };
       }
 
-      // Generate username from email for compatibility
-      const username = user.email?.split('@')[0] || 'User';
+      console.log('🔄 Fetching profile from backend API...');
+      
+      const response = await fetch(API_ENDPOINTS.auth.profile, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          // Token is invalid, clear it
+          localStorage.removeItem('authToken');
+          return {
+            success: false,
+            error: 'Authentication token expired. Please log in again.'
+          };
+        }
+        
+        const errorData = await response.json().catch(() => ({}));
+        return {
+          success: false,
+          error: errorData.message || 'Failed to fetch profile'
+        };
+      }
+      
+      const profileData = await response.json();
+      
+      console.log('✅ Profile fetched successfully from backend');
       
       return {
         success: true,
         user: {
-          id: user.uid,
-          email: user.email || '',
-          username: username,
-          subscription_status: 'demo'
+          id: profileData.id,
+          email: profileData.email,
+          username: profileData.username,
+          subscription_status: 'demo', // Default for landing page
+          profile_picture: profileData.profile_picture
         }
       };
     } catch (error: any) {
       console.error('Get profile error:', error);
-      return {
-        success: false,
-        error: 'Failed to get user profile'
-      };
+      
+      // Fallback to Firebase Auth if backend fails
+      try {
+        if (!auth) {
+          throw new Error('Firebase auth not initialized');
+        }
+        
+        const user = auth.currentUser;
+        
+        if (!user) {
+          return {
+            success: false,
+            error: 'User not found or invalid token'
+          };
+        }
+
+        console.warn('⚠️ Backend profile fetch failed, using Firebase fallback');
+        
+        // Generate username from email for compatibility
+        const username = user.email?.split('@')[0] || 'User';
+        
+        return {
+          success: true,
+          user: {
+            id: user.uid,
+            email: user.email || '',
+            username: username,
+            subscription_status: 'demo'
+          }
+        };
+      } catch (fallbackError) {
+        console.error('Firebase fallback also failed:', fallbackError);
+        return {
+          success: false,
+          error: 'Failed to get user profile'
+        };
+      }
     }
   },
 

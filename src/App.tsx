@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import LandingPage from './components/LandingPage';
 import AuthModal from './components/AuthModal';
 import PricingPage from './components/PricingPage';
@@ -13,14 +13,21 @@ import PaymentPage from './components/PaymentPage';
 import LandingLoginPage from './components/LandingLoginPage';
 import LandingSignupPage from './components/LandingSignupPage';
 import FirebaseActionHandler from './components/FirebaseActionHandler';
-import { AuthProvider } from './contexts/AuthContext';
 import { LandingAuthProvider, useLandingAuth } from './contexts/LandingAuthContext';
+import { useNavigation } from './hooks/useNavigation';
 
 function AppContentWithAuth() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
-  const navigate = useNavigate();
   const { login } = useLandingAuth();
+  const {
+    navigateToPricing,
+    navigateToDocumentation,
+    navigateToDownloads,
+    navigateToHome,
+    navigateToSignup,
+    navigate
+  } = useNavigation();
 
   const handleGetStarted = () => {
     setAuthMode('signup');
@@ -32,141 +39,117 @@ function AppContentWithAuth() {
     setShowAuthModal(true);
   };
 
-  const handleAuthSuccess = (token: string, email: string, username: string, subscriptionType?: string, userId?: number) => {
-    console.log('🎉 APP.TSX handleAuthSuccess called with:', { token: token.substring(0, 20) + '...', email, username, subscriptionType, userId });
-    
+  const handleAuthSuccess = (token: string, email: string, username: string, subscriptionType?: string, userId?: string) => {
     // Store authentication data
     localStorage.setItem('medMasterToken', token);
     localStorage.setItem('medMasterEmail', email);
     localStorage.setItem('medMasterUsername', username);
     if (userId) {
-      localStorage.setItem('medMasterUserId', userId.toString());
+      localStorage.setItem('medMasterUserId', userId);
     }
     if (subscriptionType) {
       localStorage.setItem('medMasterSubscriptionType', subscriptionType);
     }
-    
-    console.log('💾 Stored auth data in localStorage');
-    
+
     // Update the LandingAuthContext
-    console.log('🔄 Calling login function...');
-    login(token, email, username, userId || 0, subscriptionType || 'demo');
-    
+    login(token, email, username, userId || '0', subscriptionType || 'demo');
+
     // Close the auth modal
     setShowAuthModal(false);
-    console.log('✅ Auth modal closed');
   };
 
   const handleCloseAuth = () => {
     setShowAuthModal(false);
   };
 
-  // Navigation handlers
-  const handleNavigateToPricing = () => {
-    navigate('/pricing');
-  };
-
-  const handleNavigateToDocumentation = () => {
-    navigate('/documentation');
-  };
-
-  const handleNavigateToDownloads = () => {
-    navigate('/downloads');
-  };
-
-  const handleBackToLanding = () => {
-    navigate('/');
-  };
-
   return (
-    <AuthProvider>
-      <div className="App">
-        <Routes>
+    <div className="App">
+      <Routes>
           <Route 
             path="/" 
             element={
-              <LandingPage 
+              <LandingPage
                 onGetStarted={handleGetStarted}
                 onLogin={handleLogin}
-                onNavigateToPricing={handleNavigateToPricing}
-                onNavigateToDocumentation={handleNavigateToDocumentation}
-                onNavigateToDownloads={handleNavigateToDownloads}
+                onNavigateToPricing={navigateToPricing}
+                onNavigateToDocumentation={navigateToDocumentation}
+                onNavigateToDownloads={navigateToDownloads}
                 onAuthSuccess={handleAuthSuccess}
               />
             } 
           />
-          <Route 
-            path="/pricing" 
+          <Route
+            path="/pricing"
             element={
-              <PricingPage 
-                onBackToLanding={handleBackToLanding} 
-                onShowLandingLogin={() => navigate('/signup')}
+              <PricingPage
+                onBackToLanding={navigateToHome}
+                onShowLandingLogin={navigateToSignup}
               />
-            } 
+            }
           />
-          <Route 
-            path="/documentation" 
-            element={<DocumentationPage onBackToLanding={handleBackToLanding} />} 
+          <Route
+            path="/documentation"
+            element={<DocumentationPage onBackToLanding={navigateToHome} />}
           />
-          <Route 
-            path="/downloads" 
-            element={<DownloadsPage onBackToLanding={handleBackToLanding} />} 
+          <Route
+            path="/downloads"
+            element={<DownloadsPage onBackToLanding={navigateToHome} />}
           />
-          <Route 
-            path="/privacy-policy" 
-            element={<PrivacyPolicyPage onBackToLanding={handleBackToLanding} />} 
+          <Route
+            path="/privacy-policy"
+            element={<PrivacyPolicyPage onBackToLanding={navigateToHome} />}
           />
-          <Route 
-            path="/terms-conditions" 
-            element={<TermsConditionsPage onBackToLanding={handleBackToLanding} />} 
+          <Route
+            path="/terms-conditions"
+            element={<TermsConditionsPage onBackToLanding={navigateToHome} />}
           />
-          <Route 
-            path="/refund-policy" 
-            element={<RefundPolicyPage onBackToLanding={handleBackToLanding} />} 
+          <Route
+            path="/refund-policy"
+            element={<RefundPolicyPage onBackToLanding={navigateToHome} />}
           />
-          <Route 
-            path="/service-policy" 
-            element={<ServicePolicyPage onBackToLanding={handleBackToLanding} />} 
+          <Route
+            path="/service-policy"
+            element={<ServicePolicyPage onBackToLanding={navigateToHome} />}
           />
-          <Route 
-            path="/payment" 
-            element={<PaymentPage onBackToLanding={handleBackToLanding} />} 
+          <Route
+            path="/payment"
+            element={<PaymentPage onBackToLanding={navigateToHome} />}
           />
-          <Route 
-            path="/login" 
+          <Route
+            path="/login"
             element={
-              <LandingLoginPage 
-                onBackToLanding={handleBackToLanding}
+              <LandingLoginPage
+                onBackToLanding={navigateToHome}
                 onAuthSuccess={(token, email, username, userId, subscriptionType) => {
                   handleAuthSuccess(token, email, username, userId, subscriptionType);
                   // After successful login, redirect back to home page
-                  navigate('/');
+                  navigateToHome();
                 }}
-                onSwitchToSignup={() => navigate('/signup')}
+                onSwitchToSignup={navigateToSignup}
               />
-            } 
+            }
           />
-          <Route 
-            path="/signup" 
+          <Route
+            path="/signup"
             element={
-              <LandingSignupPage 
-                onBackToLanding={handleBackToLanding}
+              <LandingSignupPage
+                onBackToLanding={navigateToHome}
                 onAuthSuccess={(token, email, username, userId, subscriptionType) => {
                   handleAuthSuccess(token, email, username, userId, subscriptionType);
                   // After successful signup, redirect back to home page
-                  navigate('/');
+                  navigateToHome();
                 }}
                 onSwitchToLogin={() => navigate('/login')}
               />
-            } 
+            }
           />
-          <Route 
-            path="/auth/action" 
+          <Route
+            path="/auth/action"
             element={
-              <FirebaseActionHandler 
-                onBackToLanding={handleBackToLanding}
+              <FirebaseActionHandler
+                onBackToLanding={navigateToHome}
               />
-            } 
+            }
           />
         </Routes>
         
@@ -179,7 +162,6 @@ function AppContentWithAuth() {
           />
         )}
       </div>
-    </AuthProvider>
   );
 }
 

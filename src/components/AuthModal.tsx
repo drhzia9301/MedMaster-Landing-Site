@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Eye, EyeOff, User, Mail, Lock, Loader } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
+import { useLandingAuth } from '../contexts/LandingAuthContext';
 import { toast } from 'sonner';
 import { signInWithGoogle } from '../config/firebase';
 import { authService } from '../services/authService';
@@ -8,7 +8,7 @@ import { authService } from '../services/authService';
 interface AuthModalProps {
   mode: 'login' | 'signup';
   onClose: () => void;
-  onAuthSuccess: (token: string, email: string, username: string, subscriptionType?: string, userId?: number) => void;
+  onAuthSuccess: (token: string, email: string, username: string, subscriptionType?: string, userId?: string) => void;
   onSwitchMode: (mode: 'login' | 'signup') => void;
 }
 
@@ -25,7 +25,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ mode, onClose, onAuthSuccess, onS
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const { login, register } = useAuth();
+  const { loginWithCredentials, register } = useLandingAuth();
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -73,14 +73,14 @@ const AuthModal: React.FC<AuthModalProps> = ({ mode, onClose, onAuthSuccess, onS
       let result;
       
       if (mode === 'login') {
-        result = await login(formData.email, formData.password);
+        result = await loginWithCredentials(formData.email, formData.password);
       } else {
         result = await register(formData.email, formData.password);
       }
 
       if (result.success && result.token && result.user) {
         toast.success(mode === 'login' ? 'Welcome back!' : 'Account created successfully!');
-        onAuthSuccess(result.token, result.user.email, result.user.username, 'demo', result.user.id);
+        onAuthSuccess(result.token, result.user.email, result.user.username, 'demo', result.user.id.toString());
       } else {
         toast.error(result.message || `${mode === 'login' ? 'Login' : 'Registration'} failed`);
       }
@@ -124,7 +124,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ mode, onClose, onAuthSuccess, onS
             authResult.user.email, 
             authResult.user.username, 
             authResult.user.subscription_status || 'demo', 
-            parseInt(authResult.user.id)
+            authResult.user.id.toString()
           );
         } else {
           toast.error(authResult.error || 'Google authentication failed');

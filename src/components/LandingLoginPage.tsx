@@ -13,7 +13,7 @@ interface LandingLoginPageProps {
   onSuccess?: () => void;
   onBackToLanding?: () => void;
   onSwitchToSignup?: () => void;
-  onAuthSuccess?: (token: string, email: string, username: string, subscriptionType?: string, userId?: number) => void;
+  onAuthSuccess?: (token: string, email: string, username: string, subscriptionType?: string, userId?: string) => void;
 }
 
 const LandingLoginPage: React.FC<LandingLoginPageProps> = ({ 
@@ -95,7 +95,7 @@ const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
         const subscriptionStatus = await subscriptionService.getSubscriptionStatus();
         
         // Call onAuthSuccess callback if provided (for cross-origin scenarios)
-        onAuthSuccess?.(token, email, username, subscriptionStatus.subscription_type, userId);
+        onAuthSuccess?.(token, email, username, subscriptionStatus.subscription_type, userId.toString());
         
         if (isNewUser) {
           toast.success('Welcome to MedMaster! Your Google account has been connected.');
@@ -108,7 +108,7 @@ const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
         console.warn('Could not fetch subscription status:', subscriptionError);
         
         // Call onAuthSuccess callback if provided (for cross-origin scenarios)
-        onAuthSuccess?.(token, email, username, 'demo', userId);
+        onAuthSuccess?.(token, email, username, 'demo', userId.toString());
         
         if (isNewUser) {
           toast.success('Welcome to MedMaster! Your Google account has been connected.');
@@ -185,7 +185,7 @@ const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
       }
       
       // Call onAuthSuccess callback if provided (for cross-origin scenarios)
-      onAuthSuccess?.(authToken, userEmail, userName, subscriptionType, parseInt(userId as string, 10));
+      onAuthSuccess?.(authToken, userEmail, userName, subscriptionType, userId as string);
       
       // Show welcome message
       toast.success('Welcome! Logged in successfully.');

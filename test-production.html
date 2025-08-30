@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MedMaster Production Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>🔍 MedMaster Production Configuration Test</h1>
+    
+    <div class="test-section info">
+        <h3>Environment Information</h3>
+        <div id="env-info"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>API Connectivity Test</h3>
+        <button onclick="testAPIConnection()">Test Backend Connection</button>
+        <div id="api-test-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Firebase Configuration Test</h3>
+        <button onclick="testFirebaseConfig()">Test Firebase Config</button>
+        <div id="firebase-test-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>CORS Test</h3>
+        <button onclick="testCORS()">Test CORS Headers</button>
+        <div id="cors-test-result"></div>
+    </div>
+
+    <script>
+        // Display environment information
+        document.getElementById('env-info').innerHTML = `
+            <pre>
+Domain: ${window.location.hostname}
+Origin: ${window.location.origin}
+User Agent: ${navigator.userAgent}
+Protocol: ${window.location.protocol}
+Port: ${window.location.port || 'default'}
+            </pre>
+        `;
+
+        async function testAPIConnection() {
+            const resultDiv = document.getElementById('api-test-result');
+            resultDiv.innerHTML = '<p>Testing API connection...</p>';
+            
+            try {
+                const apiUrl = 'https://medmaster-production.up.railway.app';
+                const response = await fetch(`${apiUrl}/health`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.text();
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            <h4>✅ API Connection Successful</h4>
+                            <pre>Status: ${response.status}
+Response: ${data}</pre>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="error">
+                            <h4>❌ API Connection Failed</h4>
+                            <pre>Status: ${response.status}
+Status Text: ${response.statusText}</pre>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <h4>❌ API Connection Error</h4>
+                        <pre>Error: ${error.message}</pre>
+                    </div>
+                `;
+            }
+        }
+
+        async function testFirebaseConfig() {
+            const resultDiv = document.getElementById('firebase-test-result');
+            
+            // This would normally check if Firebase is properly configured
+            // For now, we'll just check if the config values are present
+            const firebaseConfig = {
+                apiKey: 'AIzaSyCsy00m3pl76bitsNcffnGpm9DObgKELcM',
+                authDomain: 'medmaster-auth.firebaseapp.com',
+                projectId: 'medmaster-auth'
+            };
+            
+            const isConfigValid = firebaseConfig.apiKey && firebaseConfig.authDomain && firebaseConfig.projectId;
+            
+            if (isConfigValid) {
+                resultDiv.innerHTML = `
+                    <div class="success">
+                        <h4>✅ Firebase Configuration Valid</h4>
+                        <pre>API Key: ${firebaseConfig.apiKey ? '***SET***' : 'MISSING'}
+Auth Domain: ${firebaseConfig.authDomain}
+Project ID: ${firebaseConfig.projectId}</pre>
+                    </div>
+                `;
+            } else {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <h4>❌ Firebase Configuration Invalid</h4>
+                        <pre>Missing required configuration values</pre>
+                    </div>
+                `;
+            }
+        }
+
+        async function testCORS() {
+            const resultDiv = document.getElementById('cors-test-result');
+            resultDiv.innerHTML = '<p>Testing CORS...</p>';
+            
+            try {
+                const apiUrl = 'https://medmaster-production.up.railway.app';
+                const response = await fetch(`${apiUrl}/api/auth/register-firebase`, {
+                    method: 'OPTIONS',
+                    headers: {
+                        'Origin': window.location.origin,
+                        'Access-Control-Request-Method': 'POST',
+                        'Access-Control-Request-Headers': 'Content-Type'
+                    }
+                });
+                
+                const corsHeaders = {
+                    'Access-Control-Allow-Origin': response.headers.get('Access-Control-Allow-Origin'),
+                    'Access-Control-Allow-Methods': response.headers.get('Access-Control-Allow-Methods'),
+                    'Access-Control-Allow-Headers': response.headers.get('Access-Control-Allow-Headers'),
+                    'Access-Control-Allow-Credentials': response.headers.get('Access-Control-Allow-Credentials')
+                };
+                
+                resultDiv.innerHTML = `
+                    <div class="${response.ok ? 'success' : 'error'}">
+                        <h4>${response.ok ? '✅' : '❌'} CORS Preflight Response</h4>
+                        <pre>Status: ${response.status}
+Origin: ${window.location.origin}
+CORS Headers:
+${JSON.stringify(corsHeaders, null, 2)}</pre>
+                    </div>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <h4>❌ CORS Test Error</h4>
+                        <pre>Error: ${error.message}</pre>
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

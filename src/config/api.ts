@@ -29,8 +29,7 @@ export const API_ENDPOINTS = {
   auth: {
     login: `${API_BASE_URL}/api/auth/login`,
     register: `${API_BASE_URL}/api/auth/register`,
-    registerFirebase: `${API_BASE_URL}/api/auth/register-firebase`,
-    google: `${API_BASE_URL}/api/auth/google`,
+    google: `${API_BASE_URL}/api/auth/google`, // Handles both Google sign-up and sign-in
     profile: `${API_BASE_URL}/api/auth/profile`,
   },
 

@@ -24,7 +24,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 
 // Database types for TypeScript
 export interface User {
-  id: number;
+  id: string; // Changed to string for UUID compatibility
   username: string;
   email: string;
   password: string;
@@ -48,7 +48,7 @@ export interface SubscriptionPlan {
 
 export interface UserSubscription {
   id: number;
-  user_id: number;
+  user_id: string; // Changed to string for UUID compatibility
   plan_id: number;
   status: 'demo' | 'active' | 'expired' | 'cancelled';
   start_date?: string;
