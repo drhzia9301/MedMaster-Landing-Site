@@ -14,7 +14,7 @@ interface LandingSignupPageProps {
   onSuccess?: () => void;
   onBackToLanding?: () => void;
   onSwitchToLogin?: () => void;
-  onAuthSuccess?: (token: string, email: string, username: string, subscriptionType?: string, userId?: number) => void;
+  onAuthSuccess?: (token: string, email: string, username: string, subscriptionType?: string, userId?: string) => void;
 }
 
 const LandingSignupPage: React.FC<LandingSignupPageProps> = ({ 
@@ -33,6 +33,11 @@ const LandingSignupPage: React.FC<LandingSignupPageProps> = ({
   // Removed PasswordSetupModal - Google users complete auth immediately
   const { login } = useLandingAuth();
 
+  // Component mounted - ready for user interaction
+  useEffect(() => {
+    console.log('🔍 LandingSignupPage: Component mounted and ready');
+  }, []);
+
   // Handle Google Sign-In redirect result on page load
   useEffect(() => {
     const checkRedirectResult = async () => {
@@ -40,7 +45,15 @@ const LandingSignupPage: React.FC<LandingSignupPageProps> = ({
         const result = await handleRedirectResult();
         if (result && result.idToken) {
           console.log('Processing Google Sign-In redirect result:', result);
-          await handleGoogleSignIn(result.idToken);
+          // Pass the complete result object, not just the idToken
+          const userData = {
+            idToken: result.idToken,
+            email: result.user.email,
+            displayName: result.user.displayName,
+            uid: result.user.uid,
+            photoURL: result.user.photoURL
+          };
+          await handleGoogleSignIn(userData);
         }
       } catch (error: any) {
         console.error('Error handling Google Sign-In redirect:', error);
@@ -69,12 +82,46 @@ const LandingSignupPage: React.FC<LandingSignupPageProps> = ({
   }, []);
 
   const handleGoogleSignIn = async (userData: any) => {
+    console.log('🎯 LandingSignupPage: handleGoogleSignIn called with userData:', {
+      uid: userData?.uid,
+      email: userData?.email,
+      displayName: userData?.displayName,
+      hasIdToken: !!userData?.idToken,
+      idTokenLength: userData?.idToken?.length
+    });
     setError(null);
     setLoading(true);
 
     try {
+      // Extract the required data from userData object
+      const firebaseData = {
+        idToken: userData.idToken,
+        email: userData.email,
+        displayName: userData.displayName,
+        uid: userData.uid,
+        photoURL: userData.photoURL
+      };
+      
+      console.log('🔄 LandingSignupPage: Processing Google Sign-In data:', { ...firebaseData, idToken: '[REDACTED]' });
+      
       // Use auth service for Google authentication
-      const result = await authService.registerFirebase(userData);
+      console.log('🔐 LandingSignupPage: Sending Google user data to auth service...');
+      const result = await authService.registerFirebase(firebaseData);
+      console.log('✅ LandingSignupPage: Auth service response:', {
+        success: result.success,
+        hasUser: !!result.user,
+        hasToken: !!result.token,
+        userId: result.userId,
+        isNewUser: result.isNewUser,
+        error: result.error
+      });
+      console.log('🔍 LandingSignupPage: Full auth service result object:', result);
+      console.log('🔍 LandingSignupPage: API Configuration Debug:', {
+        VITE_API_URL: import.meta.env.VITE_API_URL,
+        MODE: import.meta.env.MODE,
+        PROD: import.meta.env.PROD,
+        DEV: import.meta.env.DEV
+      });
       
       if (!result.success || !result.user || !result.token) {
         throw new Error(result.error || 'Google authentication failed');
@@ -98,7 +145,7 @@ const LandingSignupPage: React.FC<LandingSignupPageProps> = ({
         login(token, email, username, userId, subscriptionStatus.subscription_type);
         
         if (onAuthSuccess) {
-          onAuthSuccess(token, email, username, subscriptionStatus.subscription_type, userId);
+          onAuthSuccess(token, email, username, subscriptionStatus.subscription_type, userId.toString());
         }
         
         if (isNewUser) {
@@ -115,7 +162,7 @@ const LandingSignupPage: React.FC<LandingSignupPageProps> = ({
         login(token, email, username, userId, 'demo');
         
         if (onAuthSuccess) {
-          onAuthSuccess(token, email, username, 'demo', userId);
+          onAuthSuccess(token, email, username, 'demo', userId.toString());
         }
         
         if (isNewUser) {
@@ -198,7 +245,7 @@ const LandingSignupPage: React.FC<LandingSignupPageProps> = ({
         login(token, email, username, userId, subscriptionStatus.subscription_type);
         
         // Call onAuthSuccess callback if provided (for cross-origin scenarios)
-        onAuthSuccess?.(token, email, username, subscriptionStatus.subscription_type, userId);
+        onAuthSuccess?.(token, email, username, subscriptionStatus.subscription_type, userId.toString());
         
         toast.success('Welcome to MedMaster! Your account has been created and verified.');
         onSuccess?.();
@@ -210,7 +257,7 @@ const LandingSignupPage: React.FC<LandingSignupPageProps> = ({
         login(token, email, username, userId, 'demo');
         
         // Call onAuthSuccess callback if provided (for cross-origin scenarios)
-        onAuthSuccess?.(token, email, username, 'demo', userId);
+        onAuthSuccess?.(token, email, username, 'demo', userId.toString());
         
         toast.success('Welcome to MedMaster! Account created successfully.');
         onSuccess?.();
