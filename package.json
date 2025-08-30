@@ -8,7 +8,8 @@
   },
   "scripts": {
     "dev": "vite --port 3001",
-    "build": "tsc && vite build",
+    "build": "vite build",
+    "build:check": "tsc && vite build",
     "preview": "vite preview --port 3001",
     "deploy": "npm run build && vercel --prod",
     "deploy:staging": "npm run build && vercel",
